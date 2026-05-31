@@ -76,7 +76,10 @@ export default function App() {
   const [messages, setMessages] = useState(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem('jarvis.chat.v1'));
-      return Array.isArray(saved) && saved.length ? saved : [defaultSystemMsg];
+      const cleaned = Array.isArray(saved)
+        ? saved.filter(message => !String(message.content || '').includes('Unexpected token'))
+        : [];
+      return cleaned.length ? cleaned : [defaultSystemMsg];
     } catch {
       return [defaultSystemMsg];
     }

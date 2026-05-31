@@ -7,9 +7,20 @@ self.addEventListener('install', event => {
       .then(cache => cache.addAll(SHELL_URLS))
       .catch(() => undefined)
   );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(cached => cached || fetch(event.request)

@@ -16,7 +16,28 @@ async function callProxy(messages, systemPrompt) {
     body: JSON.stringify({ messages, systemPrompt }),
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get('content-type') || '';
+  const bodyText = await res.text();
+
+  if (!contentType.includes('application/json')) {
+    const err = new Error(
+      bodyText.trim().startsWith('<!DOCTYPE')
+        ? 'Local API proxy is not running. Start Jarvis with Vercel dev, or deploy to Vercel with GROQ_KEY/ANTHROPIC_KEY set.'
+        : `Proxy returned non-JSON response: ${res.status}`
+    );
+    err.systemMessage = true;
+    throw err;
+  }
+
+  let data = {};
+  try {
+    data = JSON.parse(bodyText);
+  } catch {
+    const err = new Error('Proxy returned invalid JSON.');
+    err.systemMessage = true;
+    throw err;
+  }
+
   if (data.error) {
     const err = new Error(data.error);
     err.systemMessage = true;
