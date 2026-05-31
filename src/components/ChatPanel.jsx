@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function Message({ msg }) {
   const isUser = msg.role === 'user';
   const isSystem = msg.role === 'system';
+  const [copied, setCopied] = useState(false);
 
   if (isUser) {
     return <div className="msg msg-user">{msg.content}</div>;
@@ -23,6 +24,25 @@ function Message({ msg }) {
     ? { BUY: '✅', SELL: '❌', WAIT: '⏳', HOLD: '⏸' }[signal.action] || '📊'
     : '';
 
+  async function copySignal() {
+    const timestamp = msg.timestamp || new Date().toISOString();
+    const text = `${signal.action} ${msg.symbol || signal.symbol || ''} · ${signal.confidence}% confidence · ${signal.risk} risk · ${timestamp}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="msg msg-ai">
       <div className="msg-tag">{msg.tag || 'Jarvis'}</div>
@@ -32,7 +52,11 @@ function Message({ msg }) {
       />
       {signal && (
         <div className={`signal-box ${signalClass}`}>
-          {signalIcon} {signal.action} · {signal.confidence}% confidence · {signal.risk} risk
+          <span>{signalIcon} {signal.action} · {signal.confidence}% confidence · {signal.risk} risk</span>
+          <button className="quick-btn" onClick={copySignal}>
+            Copy
+          </button>
+          {copied && <span className="asset-label">Copied!</span>}
         </div>
       )}
     </div>
@@ -66,6 +90,7 @@ export default function ChatPanel({
   setInput,
   send,
   chatRef,
+  clearChat,
 }) {
   return (
     <div className="chat-panel">
@@ -76,7 +101,10 @@ export default function ChatPanel({
             Phase {phase}
           </span>
         </div>
-        <span className="asset-label">{asset.symbol}</span>
+        <div className="header-right">
+          <button className="quick-btn" onClick={clearChat}>Clear chat</button>
+          <span className="asset-label">{asset.symbol}</span>
+        </div>
       </div>
 
       <div className="chat-area" ref={chatRef}>
@@ -106,7 +134,17 @@ export default function ChatPanel({
           className="chat-input"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setInput('');
+              return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           placeholder="Ask anything — beginner question, trade analysis, or full hedge fund breakdown..."
           rows={1}
         />
@@ -114,6 +152,7 @@ export default function ChatPanel({
           {loading ? '...' : 'Run ↗'}
         </button>
       </div>
+      <div className="input-hint">Enter to send · Shift+Enter for new line · Esc to clear</div>
     </div>
   );
 }

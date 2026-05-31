@@ -3,12 +3,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAI } from './hooks/useAI';
 import { buildSystemPrompt } from './utils/prompts';
 import { ASSETS, AGENTS, formatPrice } from './utils/assets';
-import { fetchAllMarketData, fetchFearAndGreed } from './services/marketData';
+import { fetchAllMarketData, fetchFearAndGreed, fetchNewsHeadlines } from './services/marketData';
 import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
 import ChatPanel from './components/ChatPanel';
 import SidePanel from './components/SidePanel';
 import './App.css';
+
+const defaultSystemMsg = {
+  role: 'system',
+  content: 'Ruflo multi-agent swarm ready. Select an asset, choose your mode, and ask anything.',
+};
 
 // ── Signal extractor ─────────────────────────
 function extractSignal(text) {
@@ -222,12 +227,14 @@ export default function App() {
   const [assets, setAssets] = useState(ASSETS);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [phase, setPhase] = useState(2);
-  const [messages, setMessages] = useState([
-    {
-      role: 'system',
-      content: 'Ruflo multi-agent swarm ready. Select an asset, choose your mode, and ask anything.',
-    },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('jarvis.chat.v1'));
+      return Array.isArray(saved) && saved.length ? saved : [defaultSystemMsg];
+    } catch {
+      return [defaultSystemMsg];
+    }
+  });
   const [history, setHistory] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -237,6 +244,7 @@ export default function App() {
   const [lastSignal, setLastSignal] = useState(null);
   const [trades, setTrades] = useState(() => loadTrades());
   const [fearAndGreed, setFearAndGreed] = useState(null);
+  const [headlines, setHeadlines] = useState([]);
   const [marketReady, setMarketReady] = useState(false);
   const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
@@ -252,8 +260,30 @@ export default function App() {
   }, [messages]);
 
   useEffect(() => {
+    try {
+      sessionStorage.setItem('jarvis.chat.v1', JSON.stringify(messages.slice(-40)));
+    } catch {
+      // Session storage can be unavailable; chat still works in memory.
+    }
+  }, [messages]);
+
+  useEffect(() => {
     assetsRef.current = assets;
   }, [assets]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshHeadlines() {
+      const result = await fetchNewsHeadlines((assets[selectedIdx] || assets[0]).symbol);
+      if (!cancelled) setHeadlines(result || []);
+    }
+
+    refreshHeadlines();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIdx]);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +300,9 @@ export default function App() {
 
         setAssets(nextAssets);
         setFearAndGreed(nextFearAndGreed);
+        const news = await fetchNewsHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
+        if (cancelled) return;
+        setHeadlines(news || []);
         setMarketReady(true);
         setMarketStatus({
           state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -300,6 +333,8 @@ export default function App() {
       ]);
       setAssets(nextAssets);
       setFearAndGreed(nextFearAndGreed);
+      const news = await fetchNewsHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
+      setHeadlines(news || []);
       setMarketReady(true);
       setMarketStatus({
         state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -308,6 +343,15 @@ export default function App() {
       });
     } catch (err) {
       setMarketStatus(prev => ({ ...prev, state: 'error', error: err.message }));
+    }
+  }
+
+  function clearChat() {
+    setMessages([defaultSystemMsg]);
+    try {
+      sessionStorage.removeItem('jarvis.chat.v1');
+    } catch {
+      // Ignore storage failures; the in-memory chat is cleared above.
     }
   }
 
@@ -340,7 +384,7 @@ export default function App() {
     }
 
     try {
-      const systemPrompt = buildSystemPrompt(asset, phase, fearAndGreed);
+      const systemPrompt = buildSystemPrompt(asset, phase, fearAndGreed, headlines);
       const promptWithMemory = recalledStrategy
         ? `${systemPrompt}\n\nBEST PAST STRATEGY RECALL:\nTask type: ${recalledStrategy.taskType}\nTopology: ${recalledStrategy.topology}\nWinning agents: ${recalledStrategy.selectedAgents.join(', ')}\nPrior action: ${recalledStrategy.action}\nPrior confidence: ${recalledStrategy.confidence}%`
         : systemPrompt;
@@ -369,6 +413,8 @@ export default function App() {
         role: 'assistant',
         content,
         signal,
+        symbol: asset.symbol,
+        timestamp: new Date().toISOString(),
         tag: `Jarvis · ${modeTag} Mode`,
       };
 
@@ -479,6 +525,7 @@ export default function App() {
                 setInput={setInput}
                 send={send}
                 chatRef={chatRef}
+                clearChat={clearChat}
               />
             </div>
 

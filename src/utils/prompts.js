@@ -4,7 +4,7 @@
 // Builds the correct prompt based on phase + selected asset.
 // ─────────────────────────────────────────────
 
-export function buildSystemPrompt(asset, phase, fearAndGreed) {
+export function buildSystemPrompt(asset, phase, fearAndGreed, headlines = []) {
   const phasePrompts = {
     1: `You are Jarvis in BEGINNER TEACHING MODE (Phase 1).
 Explain everything simply. No jargon. Assume zero trading knowledge.
@@ -83,6 +83,8 @@ Volume Trend: ${asset.volumeTrend || 'Unknown'}
 Candle Trend: ${asset.candleTrend || 'Unknown'}
 Recent Candle Snapshot:
 ${buildCandleSummary(asset)}
+Recent Headlines:
+${headlines.length ? headlines.map(h => `- ${h.title} (${h.source})`).join('\n') : '- No headlines available'}
 Analysis Date: ${new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
 
 ${phasePrompts[phase]}
@@ -91,6 +93,8 @@ NON-NEGOTIABLE RULES:
 - NEVER guarantee profit
 - Capital protection is always priority #1
 - Avoid recommending trades with confidence below 60%
+- If computed confidence is below 55%, override action to WAIT automatically and state "Confidence below threshold — defaulting to WAIT."
+- Never output a BUY or SELL signal with confidence below 60%.
 - Prefer WAIT over risky or unclear setups
 - No hype, no emotional language
 - This is PAPER TRADING / SIMULATION ONLY — educational purposes

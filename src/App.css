@@ -447,6 +447,7 @@ body {
   max-height: 100px;
 }
 .chat-input:focus { outline: none; border-color: var(--blue); }
+.input-hint { font-size: 11px; color: var(--t); opacity: 0.45; margin-top: 4px; }
 .send-btn {
   padding: 8px 16px;
   font-size: 13px;

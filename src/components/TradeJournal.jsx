@@ -24,6 +24,37 @@ function calculatePnl(trade, assets) {
   return ((currentPrice - entryPrice) / entryPrice) * 100;
 }
 
+function escapeCsv(value) {
+  const text = String(value ?? '');
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportCsv(trades) {
+  const rows = [
+    ['Time', 'Asset', 'Action', 'Confidence', 'Risk', 'Entry Price'],
+    ...trades.map(trade => [
+      trade.timestamp || '',
+      trade.symbol || '',
+      trade.action || '',
+      trade.confidence ?? '',
+      trade.risk || '',
+      trade.price ?? '',
+    ]),
+  ];
+  const csv = rows.map(row => row.map(escapeCsv).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `jarvis-trades-${date}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function TradeJournal({ trades, assets }) {
   const buyTrades = trades.filter(trade => trade.action === 'BUY');
   const wins = buyTrades.filter(trade => {
@@ -81,6 +112,9 @@ export default function TradeJournal({ trades, assets }) {
           <div className="trade-summary">
             <span>Total signals: {trades.length}</span>
             <span>Win rate: {winRate}%</span>
+            <button className="quick-btn" onClick={() => exportCsv(trades)}>
+              Export CSV
+            </button>
           </div>
         </>
       )}

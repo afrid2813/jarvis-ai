@@ -23,6 +23,16 @@ const BINANCE_BASE_URLS = [
   'https://api.binance.com',
 ];
 
+const NEWS_SEARCH_TERMS = {
+  'BTC/USD': 'bitcoin',
+  'ETH/USD': 'ethereum',
+  'SOL/USD': 'solana',
+  SPY: 'S&P 500',
+  AAPL: 'Apple stock',
+  'EUR/USD': 'euro dollar',
+  GLD: 'gold price',
+};
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 6500) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -57,6 +67,28 @@ export async function fetchFearAndGreed() {
       value: Number(item.value),
       classification: item.value_classification,
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchNewsHeadlines(symbol) {
+  const key = process.env.REACT_APP_NEWS_KEY;
+  if (!key) return null;
+
+  try {
+    const searchTerm = NEWS_SEARCH_TERMS[symbol] || symbol;
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(searchTerm)}&pageSize=5&sortBy=publishedAt&apiKey=${encodeURIComponent(key)}`;
+    const response = await fetchWithTimeout(url, {}, 6500);
+    if (!response.ok) return null;
+
+    const payload = await response.json();
+    const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+    return articles.slice(0, 5).map(article => ({
+      title: article.title || 'Untitled',
+      source: article.source?.name || 'Unknown source',
+      publishedAt: article.publishedAt || null,
+    }));
   } catch {
     return null;
   }
