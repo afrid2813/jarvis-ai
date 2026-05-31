@@ -73,6 +73,8 @@ MACD: ${asset.macd}
 EMA Trend: ${asset.ema}
 Bollinger Bands: ${asset.bollingerBands ? `Upper ${formatOptionalPrice(asset.bollingerBands.upper)} / Mid ${formatOptionalPrice(asset.bollingerBands.middle)} / Lower ${formatOptionalPrice(asset.bollingerBands.lower)}` : 'Unavailable'}
 Stoch RSI: ${asset.stochRSI ? `K: ${asset.stochRSI.k.toFixed(1)} / D: ${asset.stochRSI.d.toFixed(1)}` : 'Unavailable'}
+ADX: ${asset.adx ? `${asset.adx.adx.toFixed(1)} (+DI ${asset.adx.plusDI.toFixed(1)} / -DI ${asset.adx.minusDI.toFixed(1)})` : 'Unavailable'}
+OBV: ${Number.isFinite(asset.obv) ? asset.obv.toLocaleString() : 'Unavailable'}
 Trend Direction: ${asset.trend}
 24h Volume: ${asset.volume}
 Market Type: ${asset.market}
@@ -99,6 +101,10 @@ NON-NEGOTIABLE RULES:
 - Never output a BUY or SELL signal with confidence below 60%.
 - If Stoch RSI K > 80, consider overbought — avoid BUY signals unless strong volume confirmation.
 - If Stoch RSI K < 20, consider oversold — avoid SELL signals unless breakdown is confirmed.
+- ADX > 25 indicates a strong trend — prefer directional signals (BUY/SELL) over HOLD/WAIT when other indicators align.
+- ADX < 20 indicates a ranging market — avoid breakout signals, prefer HOLD or range-trading strategies.
+- If +DI > -DI and ADX > 25, trend is bullish — this confirms BUY setups.
+- If -DI > +DI and ADX > 25, trend is bearish — this confirms SELL setups.
 - Prefer WAIT over risky or unclear setups
 - No hype, no emotional language
 - This is PAPER TRADING / SIMULATION ONLY — educational purposes

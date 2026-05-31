@@ -187,6 +187,10 @@ export default function SidePanel({
             <div className="metric-label">Stoch D</div>
             <div className="metric-val" style={{ fontSize: '12px' }}>{asset.stochRSI?.d != null ? asset.stochRSI.d.toFixed(1) : '—'}</div>
           </div>
+          <div className="metric">
+            <div className="metric-label">ADX</div>
+            <div className="metric-val" style={{ fontSize: '12px' }}>{asset.adx?.adx != null ? asset.adx.adx.toFixed(1) : '—'}</div>
+          </div>
         </div>
       </div>
 

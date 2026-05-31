@@ -115,6 +115,9 @@ export default function TradeJournal({ trades, assets }) {
             <button className="quick-btn" onClick={() => exportCsv(trades)}>
               Export CSV
             </button>
+            <button className="quick-btn" onClick={() => window.print()}>
+              Print
+            </button>
           </div>
         </>
       )}

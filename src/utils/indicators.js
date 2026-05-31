@@ -114,6 +114,73 @@ export function calculateStochasticRSI(closes, rsiPeriod = 14, stochPeriod = 14)
   return { k, d };
 }
 
+export function calculateADX(candles, period = 14) {
+  if (!Array.isArray(candles) || candles.length < period * 2 + 1) return null;
+
+  const trueRanges = [];
+  const plusDMs = [];
+  const minusDMs = [];
+
+  for (let i = 1; i < candles.length; i++) {
+    const current = candles[i];
+    const previous = candles[i - 1];
+    const highDiff = current.high - previous.high;
+    const lowDiff = previous.low - current.low;
+    const trueRange = Math.max(
+      current.high - current.low,
+      Math.abs(current.high - previous.close),
+      Math.abs(current.low - previous.close),
+    );
+
+    trueRanges.push(trueRange);
+    plusDMs.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0);
+    minusDMs.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0);
+  }
+
+  const smoothTR = wilderSmooth(trueRanges, period);
+  const smoothPlusDM = wilderSmooth(plusDMs, period);
+  const smoothMinusDM = wilderSmooth(minusDMs, period);
+  const dxValues = [];
+  let lastPlusDI = null;
+  let lastMinusDI = null;
+
+  for (let i = 0; i < smoothTR.length; i++) {
+    if (!smoothTR[i]) return null;
+
+    const plusDI = 100 * smoothPlusDM[i] / smoothTR[i];
+    const minusDI = 100 * smoothMinusDM[i] / smoothTR[i];
+    const diSum = plusDI + minusDI;
+    if (!diSum) return null;
+
+    lastPlusDI = plusDI;
+    lastMinusDI = minusDI;
+    dxValues.push(100 * Math.abs(plusDI - minusDI) / diSum);
+  }
+
+  if (dxValues.length < period) return null;
+  const adxSeries = wilderSmooth(dxValues, period).map(value => value / period);
+  const adx = adxSeries[adxSeries.length - 1];
+  if (!Number.isFinite(adx)) return null;
+
+  return {
+    adx: roundToOne(adx),
+    plusDI: roundToOne(lastPlusDI),
+    minusDI: roundToOne(lastMinusDI),
+  };
+}
+
+export function calculateOBV(candles) {
+  if (!Array.isArray(candles) || candles.length < 2) return null;
+
+  return candles.slice(1).reduce((obv, candle, index) => {
+    const previous = candles[index];
+    const volume = Number(candle.volume || candle.quoteVolume || 0);
+    if (candle.close > previous.close) return obv + volume;
+    if (candle.close < previous.close) return obv - volume;
+    return obv;
+  }, 0);
+}
+
 export function calculatePriceLevels(candles) {
   if (!candles || candles.length < 10) return {};
 
@@ -135,6 +202,25 @@ export function calculatePriceLevels(candles) {
     volumeTrend: secondVolume > firstVolume * 1.08 ? 'Rising' : secondVolume < firstVolume * 0.92 ? 'Falling' : 'Stable',
     candleTrend: lastClose > firstClose ? 'Up' : lastClose < firstClose ? 'Down' : 'Flat',
   };
+}
+
+function wilderSmooth(values, period) {
+  if (values.length < period) return [];
+
+  const result = [];
+  let smoothed = values.slice(0, period).reduce((sum, value) => sum + value, 0);
+  result.push(smoothed);
+
+  for (let i = period; i < values.length; i++) {
+    smoothed = smoothed - (smoothed / period) + values[i];
+    result.push(smoothed);
+  }
+
+  return result;
+}
+
+function roundToOne(value) {
+  return Math.round(value * 10) / 10;
 }
 
 function average(values) {

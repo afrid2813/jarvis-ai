@@ -44,6 +44,7 @@ export function useMarketData(initialAssets) {
 
   useEffect(() => {
     let cancelled = false;
+    let refreshId = null;
 
     async function refreshMarketData(silent = false) {
       if (!silent) setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
@@ -59,12 +60,34 @@ export function useMarketData(initialAssets) {
       }
     }
 
+    function startInterval() {
+      if (refreshId != null) return;
+      refreshId = setInterval(() => refreshMarketData(true), 60_000);
+    }
+
+    function stopInterval() {
+      if (refreshId == null) return;
+      clearInterval(refreshId);
+      refreshId = null;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        stopInterval();
+      } else {
+        refreshMarketData(true);
+        startInterval();
+      }
+    }
+
     refreshMarketData();
-    const refreshId = setInterval(() => refreshMarketData(true), 60_000);
+    startInterval();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
-      clearInterval(refreshId);
+      stopInterval();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [applyMarketData]);
 

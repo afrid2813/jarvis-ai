@@ -4,6 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Jarvis AI — Hedge Fund Intelligence Engine" />
+    <style media="print">
+      body > * { display: none !important; }
+      #root,
+      #root *,
+      .trade-journal-card,
+      .trade-journal-card * { display: revert !important; }
+      #root { display: block !important; }
+      .app > *:not(.main-grid),
+      .main-column,
+      .side-panel > *:not(.trade-journal-card) { display: none !important; }
+      .main-grid,
+      .side-panel,
+      .trade-journal-card { display: block !important; }
+      .trade-journal-card {
+        background: transparent !important;
+        box-shadow: none !important;
+        color: #000 !important;
+        border: 0 !important;
+      }
+      .trade-table,
+      .trade-table-wrap { width: 100% !important; }
+    </style>
     <title>Jarvis AI</title>
   </head>
   <body>

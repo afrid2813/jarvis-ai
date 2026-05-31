@@ -1,4 +1,4 @@
-import { calculateBollingerBands, calculateEMA, calculateMACD, calculateRSI, calculateStochasticRSI, rollingEMA } from './indicators';
+import { calculateADX, calculateBollingerBands, calculateEMA, calculateMACD, calculateOBV, calculateRSI, calculateStochasticRSI, rollingEMA } from './indicators';
 
 test('calculateRSI returns a known 5-period RSI', () => {
   expect(calculateRSI([1, 2, 3, 2, 4, 5], 5)).toBe(83);
@@ -42,4 +42,44 @@ test('calculateStochasticRSI returns high k for a strongly rising series', () =>
   ];
 
   expect(calculateStochasticRSI(values).k).toBeGreaterThan(50);
+});
+
+test('calculateADX returns null for a flat series with zero true range', () => {
+  const candles = Array.from({ length: 40 }, (_, index) => ({
+    timestamp: index,
+    open: 10,
+    high: 10,
+    low: 10,
+    close: 10,
+    volume: 100,
+  }));
+
+  expect(calculateADX(candles)).toBeNull();
+});
+
+test('calculateADX returns strong trend for rising candles', () => {
+  const candles = Array.from({ length: 50 }, (_, index) => ({
+    timestamp: index,
+    open: 10 + index,
+    high: 12 + index,
+    low: 9 + index,
+    close: 11 + index,
+    volume: 100 + index,
+  }));
+
+  expect(calculateADX(candles).adx).toBeGreaterThan(25);
+});
+
+test('calculateOBV accumulates positively for rising closes', () => {
+  const candles = [
+    { close: 10, volume: 100 },
+    { close: 11, volume: 200 },
+    { close: 12, volume: 300 },
+  ];
+
+  expect(calculateOBV(candles)).toBe(500);
+});
+
+test('calculateOBV returns null for fewer than two candles', () => {
+  expect(calculateOBV([{ close: 10, volume: 100 }])).toBeNull();
 });

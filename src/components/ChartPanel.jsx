@@ -40,13 +40,21 @@ function buildChartPoints(asset) {
 
 function LocalChart({ asset }) {
   const prices = buildChartPoints(asset);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
+  const support = Number(asset.support);
+  const resistance = Number(asset.resistance);
+  const chartValues = [
+    ...prices,
+    ...(Number.isFinite(support) ? [support] : []),
+    ...(Number.isFinite(resistance) ? [resistance] : []),
+  ];
+  const min = Math.min(...chartValues);
+  const max = Math.max(...chartValues);
   const range = max - min || 1;
+  const priceToY = price => 100 - ((price - min) / range) * 100;
   const points = prices
     .map((price, index) => {
       const x = (index / Math.max(prices.length - 1, 1)) * 100;
-      const y = 100 - ((price - min) / range) * 100;
+      const y = priceToY(price);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(' ');
@@ -72,6 +80,36 @@ function LocalChart({ asset }) {
           strokeWidth="1.8"
           vectorEffect="non-scaling-stroke"
         />
+        {Number.isFinite(support) && (
+          <g>
+            <line
+              x1="0"
+              x2="100"
+              y1={priceToY(support)}
+              y2={priceToY(support)}
+              stroke="#7bc44a"
+              strokeDasharray="3 3"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text x="97" y={priceToY(support) - 2} fill="#7bc44a" fontSize="7" textAnchor="end">S</text>
+          </g>
+        )}
+        {Number.isFinite(resistance) && (
+          <g>
+            <line
+              x1="0"
+              x2="100"
+              y1={priceToY(resistance)}
+              y2={priceToY(resistance)}
+              stroke="#e07070"
+              strokeDasharray="3 3"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text x="97" y={priceToY(resistance) - 2} fill="#e07070" fontSize="7" textAnchor="end">R</text>
+          </g>
+        )}
       </svg>
       <div className="local-chart-overlay">
         <div>
