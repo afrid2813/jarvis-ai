@@ -25,7 +25,20 @@ export function applyCors(req, res, methods) {
   const origin = req.headers?.origin;
   const allowedOrigins = getAllowedOrigins();
 
-  if (!origin || !allowedOrigins.includes(origin)) {
+  if (!origin) {
+    return false;
+  }
+
+  const isAllowed =
+    allowedOrigins.includes(origin) ||
+    origin.endsWith('.vercel.app');
+
+  if (!isAllowed) {
+    console.log('CORS BLOCKED:', {
+      origin,
+      allowedOrigins,
+    });
+
     return false;
   }
 
@@ -33,6 +46,7 @@ export function applyCors(req, res, methods) {
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', methods.join(', '));
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Jarvis-Client');
+
   return true;
 }
 
