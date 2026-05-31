@@ -9,7 +9,7 @@ const DEFAULT_PROVIDER = 'proxy';
 const PROVIDER = DEFAULT_PROVIDER;
 
 // ── Vercel proxy (production-safe) ───────────
-async function callProxy(messages, systemPrompt) {
+export async function callProxy(messages, systemPrompt) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

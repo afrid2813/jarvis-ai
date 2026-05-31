@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' s3.tradingview.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' api.binance.com query1.finance.yahoo.com open.er-api.com api.alternative.me newsapi.org; frame-src s3.tradingview.com;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' s3.tradingview.com *.tradingview.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' api.binance.com data-api.binance.vision query1.finance.yahoo.com open.er-api.com api.alternative.me newsapi.org *.tradingview.com; frame-src s3.tradingview.com *.tradingview.com www.tradingview.com;"
         },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },

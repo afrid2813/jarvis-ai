@@ -1,5 +1,5 @@
 const CACHE_NAME = 'jarvis-shell-v1';
-const SHELL_URLS = ['/', '/static/js/main.chunk.js', '/static/css/main.chunk.css'];
+const SHELL_URLS = ['/', '/manifest.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

@@ -1,4 +1,4 @@
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
+import { applyCors, createMemoryRateLimiter, fetchJsonWithTimeout, getClientIp, logError } from './_shared.js';
 
 const NEWS_SEARCH_TERMS = {
   'BTC/USD': 'bitcoin',
@@ -10,52 +10,15 @@ const NEWS_SEARCH_TERMS = {
   GLD: 'gold price',
 };
 
-const rateLimits = new Map();
-const MAX_REQUESTS = 10;
-const WINDOW_MS = 60 * 1000;
-
-function getIp(req) {
-  return req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
-}
-
-function logError({ path, ip, err }) {
-  console.error(JSON.stringify({
-    ts: new Date().toISOString(),
-    path,
-    ip,
-    error: err.message,
-  }));
-}
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const record = rateLimits.get(ip) || { count: 0, start: now };
-
-  if (now - record.start > WINDOW_MS) {
-    record.count = 0;
-    record.start = now;
-  }
-
-  record.count++;
-  rateLimits.set(ip, record);
-
-  return record.count <= MAX_REQUESTS;
-}
+const checkRateLimit = createMemoryRateLimiter({ maxRequests: 10, windowMs: 60 * 1000 });
 
 export default async function handler(req, res) {
-  const ip = getIp(req);
+  const ip = getClientIp(req);
 
   try {
-    const origin = req.headers.origin;
-
-    if (origin !== ALLOWED_ORIGIN) {
+    if (!applyCors(req, res, ['GET', 'OPTIONS'])) {
       return res.status(403).json({ articles: [] });
     }
-
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'GET') return res.status(405).json({ articles: [] });
@@ -70,10 +33,9 @@ export default async function handler(req, res) {
     const symbol = String(req.query?.symbol || '');
     const searchTerm = NEWS_SEARCH_TERMS[symbol] || symbol;
     const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(searchTerm)}&pageSize=5&sortBy=publishedAt&apiKey=${encodeURIComponent(key)}`;
-    const response = await fetch(url);
+    const { response, data: payload } = await fetchJsonWithTimeout(url, {}, 6500);
     if (!response.ok) return res.status(200).json({ articles: [] });
 
-    const payload = await response.json();
     const articles = Array.isArray(payload?.articles)
       ? payload.articles.slice(0, 5).map(article => ({
         title: article.title || 'Untitled',
