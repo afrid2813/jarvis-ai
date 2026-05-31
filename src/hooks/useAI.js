@@ -22,7 +22,7 @@ async function callProxy(messages, systemPrompt) {
   if (!contentType.includes('application/json')) {
     const err = new Error(
       bodyText.trim().startsWith('<!DOCTYPE')
-        ? 'Local API proxy is not running. Start Jarvis with Vercel dev, or deploy to Vercel with GROQ_KEY/ANTHROPIC_KEY set.'
+        ? 'Local API proxy is not running. Start Jarvis with npm start, or deploy to Vercel with GROQ_KEY/ANTHROPIC_KEY set.'
         : `Proxy returned non-JSON response: ${res.status}`
     );
     err.systemMessage = true;

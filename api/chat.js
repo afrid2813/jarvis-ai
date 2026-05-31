@@ -39,6 +39,14 @@ function logError({ path, ip, err }) {
   }));
 }
 
+function missingKeyError(provider) {
+  return {
+    error: provider === 'anthropic'
+      ? 'Anthropic is selected, but ANTHROPIC_KEY is missing. Add it to .env.local for local dev or Vercel environment variables for production.'
+      : 'Groq is selected, but GROQ_KEY is missing. Add it to .env.local for local dev or Vercel environment variables for production.',
+  };
+}
+
 async function checkRateLimit(ip) {
   try {
     const key = `ratelimit:${ip}`;
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
 
     if (PROVIDER === 'groq') {
       const key = process.env.GROQ_KEY;
-      if (!key) throw new Error('GROQ_KEY not set in Vercel environment variables');
+      if (!key) return res.status(500).json(missingKeyError('groq'));
 
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -132,7 +140,7 @@ export default async function handler(req, res) {
 
     } else if (PROVIDER === 'anthropic') {
       const key = process.env.ANTHROPIC_KEY;
-      if (!key) throw new Error('ANTHROPIC_KEY not set in Vercel environment variables');
+      if (!key) return res.status(500).json(missingKeyError('anthropic'));
 
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
