@@ -44,6 +44,24 @@ const YAHOO_SYMBOLS = {
   'GLD':     'GLD',
 };
 
+export async function fetchFearAndGreed() {
+  try {
+    const response = await fetchWithTimeout('https://api.alternative.me/fng/?limit=1', {}, 6500);
+    if (!response.ok) return null;
+
+    const payload = await response.json();
+    const item = payload?.data?.[0];
+    if (!item) return null;
+
+    return {
+      value: Number(item.value),
+      classification: item.value_classification,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchBinance(path) {
   let lastError = null;
 
@@ -298,20 +316,40 @@ function calculateEMA(values, period) {
 }
 
 function calculateMACD(closes) {
-  const ema12 = calculateEMA(closes, 12);
-  const ema26 = calculateEMA(closes, 26);
+  const ema12 = rollingEMA(closes, 12);
+  const ema26 = rollingEMA(closes, 26);
+  const macdSeries = closes
+    .map((_, index) => {
+      if (ema12[index] == null || ema26[index] == null) return null;
+      return ema12[index] - ema26[index];
+    })
+    .filter(value => value != null);
 
-  if (!ema12 || !ema26) return { histogram: 0 };
+  const signalSeries = rollingEMA(macdSeries, 9).filter(value => value != null);
+  const macdLine = macdSeries[macdSeries.length - 1] || 0;
+  const signalLine = signalSeries[signalSeries.length - 1] || 0;
 
-  const macdLine = ema12 - ema26;
-  const signalLine = calculateEMA(closes.slice(-26).map((close, index, recent) => {
-    const partial = closes.slice(0, closes.length - recent.length + index + 1);
-    const short = calculateEMA(partial, 12);
-    const long = calculateEMA(partial, 26);
-    return short && long ? short - long : 0;
-  }), 9) || 0;
+  return {
+    macdLine,
+    signalLine,
+    histogram: macdLine - signalLine,
+  };
+}
 
-  return { histogram: macdLine - signalLine };
+function rollingEMA(values, period) {
+  const result = Array(values.length).fill(null);
+  if (values.length < period) return result;
+
+  const multiplier = 2 / (period + 1);
+  let ema = values.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
+  result[period - 1] = ema;
+
+  for (let i = period; i < values.length; i++) {
+    ema = (values[i] - ema) * multiplier + ema;
+    result[i] = ema;
+  }
+
+  return result;
 }
 
 function deriveTrend(price, ema50, ema200, macdHistogram) {

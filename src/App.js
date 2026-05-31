@@ -3,8 +3,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAI } from './hooks/useAI';
 import { buildSystemPrompt } from './utils/prompts';
 import { ASSETS, AGENTS, formatPrice } from './utils/assets';
-import { fetchAllMarketData } from './services/marketData';
+import { fetchAllMarketData, fetchFearAndGreed } from './services/marketData';
 import { loadEvolutionState, recallBestStrategy, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
+import TickerCard from './components/TickerCard';
+import ChatPanel from './components/ChatPanel';
+import SidePanel from './components/SidePanel';
 import './App.css';
 
 // ── Signal extractor ─────────────────────────
@@ -39,138 +42,6 @@ function normalizeSignal(signal) {
 
 // ── Sub-components ───────────────────────────
 
-function TickerCard({ asset, selected, onClick }) {
-  const up = asset.change >= 0;
-  return (
-    <div
-      className={`ticker-card ${selected ? 'selected' : ''}`}
-      onClick={onClick}
-    >
-      <div className="ticker-top">
-        <span className="ticker-symbol">{asset.symbol}</span>
-        <span className={`ticker-market ${asset.stale ? 'stale' : ''}`}>
-          {asset.stale ? 'stale' : asset.market}
-        </span>
-      </div>
-      <div className="ticker-price">{formatPrice(asset)}</div>
-      <div className={`ticker-change ${up ? 'up' : 'dn'}`}>
-        {up ? '▲' : '▼'} {Math.abs(asset.change)}%
-      </div>
-    </div>
-  );
-}
-
-function AgentRow({ agent, status }) {
-  // status: 'idle' | 'running' | 'done'
-  return (
-    <div className="agent-row">
-      <div className="agent-left">
-        <div className={`agent-dot ${status}`} />
-        <span className="agent-icon">{agent.icon}</span>
-        <span className="agent-name">{agent.name}</span>
-      </div>
-      <span className={`agent-status ${status}`}>
-        {status === 'done' ? '✓ done' : status === 'running' ? 'running' : 'idle'}
-      </span>
-    </div>
-  );
-}
-
-function SwarmBar({ agent, value, index }) {
-  const colors = ['#185FA5','#3B6D11','#993C1D','#854F0B','#A32D2D','#0F6E56','#534AB7'];
-  return (
-    <div className="swarm-row">
-      <span className="swarm-label">{agent.name.replace(' Agent', '')}</span>
-      <div className="swarm-track">
-        <div
-          className="swarm-fill"
-          style={{ width: `${value || 0}%`, background: colors[index] }}
-        />
-      </div>
-      <span className="swarm-val">{value != null ? `${value}%` : '—'}</span>
-    </div>
-  );
-}
-
-function RiskMeter({ level }) {
-  const map = {
-    LOW:    { width: '22%', color: '#3B6D11', label: 'Low' },
-    MEDIUM: { width: '55%', color: '#854F0B', label: 'Medium' },
-    HIGH:   { width: '88%', color: '#A32D2D', label: 'High' },
-  };
-  const r = level ? map[level] || map.MEDIUM : { width: '0%', color: '#5a5a5a', label: '—' };
-  return (
-    <div className="risk-meter">
-      <div className="risk-header">
-        <span>Capital Risk</span>
-        <span className="risk-label" style={{ color: r.color }}>{r.label || '—'}</span>
-      </div>
-      <div className="risk-track">
-        <div className="risk-bar" style={{ width: r.width, background: r.color }} />
-      </div>
-      <div className="risk-scale">
-        <span>Low</span><span>Medium</span><span>High</span>
-      </div>
-    </div>
-  );
-}
-
-function Message({ msg }) {
-  const isUser = msg.role === 'user';
-  const isSystem = msg.role === 'system';
-
-  if (isUser) {
-    return <div className="msg msg-user">{msg.content}</div>;
-  }
-  if (isSystem) {
-    return (
-      <div className="msg msg-system">
-        <strong>Jarvis online.</strong> {msg.content}
-      </div>
-    );
-  }
-
-  const signal = msg.signal;
-  const signalClass = signal
-    ? { BUY: 'sig-buy', SELL: 'sig-sell', WAIT: 'sig-wait', HOLD: 'sig-hold' }[signal.action] || 'sig-hold'
-    : '';
-  const signalIcon = signal
-    ? { BUY: '✅', SELL: '❌', WAIT: '⏳', HOLD: '⏸' }[signal.action] || '📊'
-    : '';
-
-  return (
-    <div className="msg msg-ai">
-      <div className="msg-tag">{msg.tag || 'Jarvis'}</div>
-      <div
-        className="msg-body"
-        dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
-      />
-      {signal && (
-        <div className={`signal-box ${signalClass}`}>
-          {signalIcon} {signal.action} · {signal.confidence}% confidence · {signal.risk} risk
-        </div>
-      )}
-    </div>
-  );
-}
-
-function formatMarkdown(text) {
-  return escapeHtml(text)
-    .replace(/^## (.+)$/gm, '<div class="md-h2">$1</div>')
-    .replace(/^### (.+)$/gm, '<div class="md-h3">$1</div>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br/>');
-}
-
-function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 function formatUpdateTime(value) {
   if (!value) return 'Static snapshot';
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -180,6 +51,7 @@ function toTradingViewSymbol(symbol) {
   const map = {
     'BTC/USD': 'COINBASE:BTCUSD',
     'ETH/USD': 'COINBASE:ETHUSD',
+    'SOL/USD': 'COINBASE:SOLUSD',
     SPY: 'AMEX:SPY',
     AAPL: 'NASDAQ:AAPL',
     'EUR/USD': 'FX:EURUSD',
@@ -345,56 +217,6 @@ function TradingViewChart({ asset }) {
   );
 }
 
-function EvolutionOSPanel({ state, latestTrace }) {
-  const topAgents = Object.entries(state.agentScores)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
-  const latestReflection = state.reflections[0];
-  const pluginCandidate = state.pluginCandidates[state.pluginCandidates.length - 1];
-
-  return (
-    <div className="card evolution-card">
-      <div className="card-title">Self-Evolving OS</div>
-      <div className="evolution-grid">
-        <div className="evolution-stat">
-          <span>Tasks</span>
-          <strong>{state.metrics.taskCount}</strong>
-        </div>
-        <div className="evolution-stat">
-          <span>Success</span>
-          <strong>{Math.round(state.metrics.successRate * 100)}%</strong>
-        </div>
-        <div className="evolution-stat">
-          <span>Latency</span>
-          <strong>{state.metrics.averageLatencyMs ? `${Math.round(state.metrics.averageLatencyMs / 1000)}s` : '—'}</strong>
-        </div>
-        <div className="evolution-stat">
-          <span>Topology</span>
-          <strong>{latestTrace?.topology || 'idle'}</strong>
-        </div>
-      </div>
-      <div className="evolution-list">
-        {topAgents.map(([name, score]) => (
-          <div className="evolution-row" key={name}>
-            <span>{name.replace(' Agent', '')}</span>
-            <span>{Math.round(score * 100)}%</span>
-          </div>
-        ))}
-      </div>
-      {latestReflection && (
-        <div className="evolution-note">
-          <strong>Reflection:</strong> {latestReflection.fix}
-        </div>
-      )}
-      {pluginCandidate && (
-        <div className="evolution-note plugin">
-          <strong>Plugin candidate:</strong> {pluginCandidate.name}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main App ─────────────────────────────────
 export default function App() {
   const [assets, setAssets] = useState(ASSETS);
@@ -413,6 +235,7 @@ export default function App() {
   const [swarmData, setSwarmData] = useState(null);
   const [riskLevel, setRiskLevel] = useState(null);
   const [lastSignal, setLastSignal] = useState(null);
+  const [fearAndGreed, setFearAndGreed] = useState(null);
   const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
   const [latestTrace, setLatestTrace] = useState(null);
@@ -437,10 +260,14 @@ export default function App() {
       if (!silent) setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
 
       try {
-        const nextAssets = await fetchAllMarketData(assetsRef.current);
+        const [nextAssets, nextFearAndGreed] = await Promise.all([
+          fetchAllMarketData(assetsRef.current),
+          fetchFearAndGreed(),
+        ]);
         if (cancelled) return;
 
         setAssets(nextAssets);
+        setFearAndGreed(nextFearAndGreed);
         setMarketStatus({
           state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
           updatedAt: new Date().toISOString(),
@@ -464,8 +291,12 @@ export default function App() {
   async function refreshNow() {
     setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
     try {
-      const nextAssets = await fetchAllMarketData(assets);
+      const [nextAssets, nextFearAndGreed] = await Promise.all([
+        fetchAllMarketData(assets),
+        fetchFearAndGreed(),
+      ]);
       setAssets(nextAssets);
+      setFearAndGreed(nextFearAndGreed);
       setMarketStatus({
         state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
         updatedAt: new Date().toISOString(),
@@ -505,7 +336,7 @@ export default function App() {
     }
 
     try {
-      const systemPrompt = buildSystemPrompt(asset, phase);
+      const systemPrompt = buildSystemPrompt(asset, phase, fearAndGreed);
       const promptWithMemory = recalledStrategy
         ? `${systemPrompt}\n\nBEST PAST STRATEGY RECALL:\nTask type: ${recalledStrategy.taskType}\nTopology: ${recalledStrategy.topology}\nWinning agents: ${recalledStrategy.selectedAgents.join(', ')}\nPrior action: ${recalledStrategy.action}\nPrior confidence: ${recalledStrategy.confidence}%`
         : systemPrompt;
@@ -546,7 +377,7 @@ export default function App() {
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `**Error:** ${err.message}\n\nIf using Ollama, make sure it is running: open a terminal and run \`ollama serve\``,
+        content: `**Error:** ${err.message}\n\nJarvis now sends AI requests through \`/api/chat\`. Check that the Vercel/serverless proxy is running and the provider keys are set as server environment variables.`,
         tag: 'Jarvis · Error',
       }]);
 
@@ -617,168 +448,32 @@ export default function App() {
         <div className="main-column">
           <TradingViewChart asset={asset} />
 
-          {/* Chat panel */}
-          <div className="chat-panel">
-            <div className="panel-header">
-              <div className="panel-title">
-                ⚡ Swarm Intelligence Engine
-                <span className={`phase-pill phase-${phase}`}>
-                  Phase {phase}
-                </span>
-              </div>
-              <span className="asset-label">{asset.symbol}</span>
-            </div>
-
-            <div className="chat-area" ref={chatRef}>
-              {messages.map((m, i) => <Message key={i} msg={m} />)}
-              {loading && (
-                <div className="msg msg-ai">
-                  <div className="msg-tag">
-                    Jarvis · {phase === 3 ? 'Running 7 agents' : 'Thinking'}...
-                  </div>
-                  <div className="loading-dots">
-                    <span /><span /><span />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="quick-row">
-              {(quickButtons[phase] || []).map(q => (
-                <button key={q} className="quick-btn" onClick={() => send(q)}>
-                  {q}
-                </button>
-              ))}
-            </div>
-
-            <div className="input-row">
-              <textarea
-                className="chat-input"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Ask anything — beginner question, trade analysis, or full hedge fund breakdown..."
-                rows={1}
-              />
-              <button className="send-btn" onClick={() => send()} disabled={loading}>
-                {loading ? '...' : 'Run ↗'}
-              </button>
-            </div>
-          </div>
+          <ChatPanel
+            asset={asset}
+            phase={phase}
+            messages={messages}
+            loading={loading}
+            quickButtons={quickButtons}
+            input={input}
+            setInput={setInput}
+            send={send}
+            chatRef={chatRef}
+          />
         </div>
 
-        {/* Side panel */}
-        <div className="side-panel">
-
-          {/* Mode selector */}
-          <div className="card">
-            <div className="card-title">Intelligence Mode</div>
-            <div className="phase-row">
-              {[1, 2, 3].map(p => (
-                <button
-                  key={p}
-                  className={`phase-btn ${phase === p ? `phase-btn-${p}` : ''}`}
-                  onClick={() => setPhase(p)}
-                >
-                  {phaseLabels[p]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Agent swarm */}
-          <EvolutionOSPanel state={evolutionState} latestTrace={latestTrace} />
-
-          <div className="card">
-            <div className="card-title">Agent Swarm Status</div>
-            {AGENTS.map((a, i) => (
-              <AgentRow
-                key={a.name}
-                agent={a}
-                status={i < agentActive ? 'done' : i === agentActive ? 'running' : 'idle'}
-              />
-            ))}
-          </div>
-
-          {/* Swarm confidence */}
-          <div className="card">
-            <div className="card-title">Swarm Confidence</div>
-            {AGENTS.map((a, i) => (
-              <SwarmBar
-                key={a.name}
-                agent={a}
-                index={i}
-                value={swarmData ? swarmData[i] : null}
-              />
-            ))}
-          </div>
-
-          {/* Risk meter */}
-          <div className="card">
-            <div className="card-title">Risk Meter</div>
-            <RiskMeter level={riskLevel} />
-          </div>
-
-          {/* Asset metrics */}
-          <div className="card">
-            <div className="card-title">Asset Metrics</div>
-            <div className="metrics-grid">
-              <div className="metric">
-                <div className="metric-label">RSI</div>
-                <div className="metric-val" style={{
-                  color: asset.rsi > 70 ? '#A32D2D' : asset.rsi < 30 ? '#3B6D11' : 'inherit'
-                }}>{asset.rsi}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Trend</div>
-                <div className="metric-val" style={{
-                  color: asset.trend === 'Bullish' ? '#3B6D11' : asset.trend === 'Bearish' ? '#A32D2D' : 'inherit',
-                  fontSize: '13px'
-                }}>{asset.trend}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">MACD</div>
-                <div className="metric-val" style={{
-                  color: asset.macd === 'Positive' ? '#3B6D11' : asset.macd === 'Negative' ? '#A32D2D' : 'inherit',
-                  fontSize: '12px'
-                }}>{asset.macd}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Volume</div>
-                <div className="metric-val" style={{ fontSize: '12px' }}>{asset.volume}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Support</div>
-                <div className="metric-val" style={{ fontSize: '12px' }}>{asset.support ? formatPrice({ price: asset.support }) : '—'}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Resistance</div>
-                <div className="metric-val" style={{ fontSize: '12px' }}>{asset.resistance ? formatPrice({ price: asset.resistance }) : '—'}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Candles</div>
-                <div className="metric-val" style={{ fontSize: '12px' }}>{asset.candles?.length || 0} · {asset.candleInterval || '—'}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Source</div>
-                <div className="metric-val" style={{ fontSize: '11px' }}>{asset.dataSource || 'fallback'}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Last signal */}
-          <div className="card">
-            <div className="card-title">Last Signal</div>
-            {lastSignal ? (
-              <div className={`last-signal signal-pill-${{ BUY: 'buy', SELL: 'sell', WAIT: 'wait', HOLD: 'hold' }[lastSignal.action] || 'hold'}`}>
-                {{ BUY: '✅', SELL: '❌', WAIT: '⏳', HOLD: '⏸' }[lastSignal.action]} <strong>{lastSignal.action}</strong> on {lastSignal.symbol} · {lastSignal.confidence}% · {lastSignal.risk} risk
-              </div>
-            ) : (
-              <div className="no-signal">No signal yet. Run an analysis.</div>
-            )}
-          </div>
-
-        </div>
+        <SidePanel
+          phase={phase}
+          setPhase={setPhase}
+          phaseLabels={phaseLabels}
+          evolutionState={evolutionState}
+          latestTrace={latestTrace}
+          agents={AGENTS}
+          agentActive={agentActive}
+          swarmData={swarmData}
+          riskLevel={riskLevel}
+          asset={asset}
+          lastSignal={lastSignal}
+        />
       </div>
 
       <div className="disclaimer">

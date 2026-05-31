@@ -4,7 +4,7 @@
 // Builds the correct prompt based on phase + selected asset.
 // ─────────────────────────────────────────────
 
-export function buildSystemPrompt(asset, phase) {
+export function buildSystemPrompt(asset, phase, fearAndGreed) {
   const phasePrompts = {
     1: `You are Jarvis in BEGINNER TEACHING MODE (Phase 1).
 Explain everything simply. No jargon. Assume zero trading knowledge.
@@ -74,6 +74,7 @@ EMA Trend: ${asset.ema}
 Trend Direction: ${asset.trend}
 24h Volume: ${asset.volume}
 Market Type: ${asset.market}
+Fear & Greed Index: ${fearAndGreed ? `${fearAndGreed.value} — ${fearAndGreed.classification}` : 'Unavailable'}
 Data Source: ${asset.dataSource || 'Static fallback'}
 Candle Interval: ${asset.candleInterval || 'n/a'}
 Support: ${formatOptionalPrice(asset.support)}

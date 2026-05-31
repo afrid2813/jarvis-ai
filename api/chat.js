@@ -17,6 +17,7 @@
 const PROVIDER = process.env.AI_PROVIDER || 'groq';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-70b-8192';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 
 // Simple in-memory rate limiter (resets on cold start)
 const rateLimits = new Map();
@@ -39,8 +40,15 @@ function checkRateLimit(ip) {
 }
 
 export default async function handler(req, res) {
-  // CORS headers — allow your frontend origin
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+
+  if (origin !== ALLOWED_ORIGIN) {
+    return res.status(403).json({ error: 'Forbidden origin' });
+  }
+
+  // CORS headers — allow only the configured frontend origin
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
