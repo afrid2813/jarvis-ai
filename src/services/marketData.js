@@ -11,7 +11,7 @@
 // Binance public market data does not need an API key for prices/candles.
 // ─────────────────────────────────────────────────────────
 
-import { calculateBollingerBands, calculateEMA, calculateMACD, calculatePriceLevels, calculateRSI } from '../utils/indicators';
+import { calculateBollingerBands, calculateEMA, calculateMACD, calculatePriceLevels, calculateRSI, calculateStochasticRSI } from '../utils/indicators';
 
 // ── Asset map ─────────────────────────────────────────────
 const BINANCE_SYMBOLS = {
@@ -325,6 +325,7 @@ function calculateIndicators(candles) {
   const rsi = calculateRSI(closes);
   const macd = calculateMACD(closes);
   const bollingerBands = calculateBollingerBands(closes);
+  const stochRSI = calculateStochasticRSI(closes);
   const ema50 = calculateEMA(closes, 50);
   const ema200 = calculateEMA(closes, 200);
   const latestClose = closes[closes.length - 1];
@@ -338,6 +339,7 @@ function calculateIndicators(candles) {
       : latestClose >= ema50 ? 'Above 50 EMA' : 'Below 50 EMA',
     trend,
     bollingerBands,
+    stochRSI,
   };
 }
 

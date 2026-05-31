@@ -84,6 +84,36 @@ export function calculateBollingerBands(closes, period = 20, stdDevMultiplier = 
   };
 }
 
+export function calculateStochasticRSI(closes, rsiPeriod = 14, stochPeriod = 14) {
+  if (closes.length < rsiPeriod + stochPeriod + 3) return null;
+
+  const rsiValues = [];
+  for (let i = rsiPeriod; i < closes.length; i++) {
+    const rsi = calculateRSI(closes.slice(i - rsiPeriod, i + 1), rsiPeriod);
+    if (rsi == null) return null;
+    rsiValues.push(rsi);
+  }
+
+  const kValues = [];
+  for (let i = rsiValues.length - 3; i < rsiValues.length; i++) {
+    const window = rsiValues.slice(i - stochPeriod + 1, i + 1);
+    if (window.length < stochPeriod) return null;
+
+    const minRSI = Math.min(...window);
+    const maxRSI = Math.max(...window);
+    const range = maxRSI - minRSI;
+    if (range === 0) return null;
+
+    kValues.push(((rsiValues[i] - minRSI) / range) * 100);
+  }
+
+  const k = kValues[kValues.length - 1];
+  const d = kValues.reduce((sum, value) => sum + value, 0) / kValues.length;
+  if (!Number.isFinite(k) || !Number.isFinite(d)) return null;
+
+  return { k, d };
+}
+
 export function calculatePriceLevels(candles) {
   if (!candles || candles.length < 10) return {};
 

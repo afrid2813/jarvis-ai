@@ -1,11 +1,15 @@
 // src/App.js
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useAlertChecker } from './hooks/useAlertChecker';
 import { useAI } from './hooks/useAI';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useMarketData } from './hooks/useMarketData';
 import { buildSystemPrompt } from './utils/prompts';
-import { ASSETS, AGENTS, formatPrice, loadAlerts, saveAlerts } from './utils/assets';
-import { fetchAllMarketData, fetchFearAndGreed, fetchNewsHeadlines } from './services/marketData';
+import { ASSETS, AGENTS, loadAlerts, saveAlerts } from './utils/assets';
+import { fetchNewsHeadlines } from './services/marketData';
 import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
+import ChartPanel from './components/ChartPanel';
 import ChatPanel from './components/ChatPanel';
 import CompareTable from './components/CompareTable';
 import SidePanel from './components/SidePanel';
@@ -53,179 +57,18 @@ function formatUpdateTime(value) {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function toTradingViewSymbol(symbol) {
-  const map = {
-    'BTC/USD': 'COINBASE:BTCUSD',
-    'ETH/USD': 'COINBASE:ETHUSD',
-    'SOL/USD': 'COINBASE:SOLUSD',
-    SPY: 'AMEX:SPY',
-    AAPL: 'NASDAQ:AAPL',
-    'EUR/USD': 'FX:EURUSD',
-    GLD: 'AMEX:GLD',
-  };
-
-  return map[symbol] || symbol.replace('/', '');
-}
-
-function getTradingViewDataStatus(asset) {
-  if (asset.market === 'crypto' || asset.market === 'forex') {
-    return { label: 'Realtime feed', tone: 'live' };
-  }
-
-  return { label: 'Exchange may delay', tone: 'delay' };
-}
-
-function buildChartPoints(asset) {
-  const candles = Array.isArray(asset.candles) && asset.candles.length > 2
-    ? asset.candles.slice(-48).map(candle => candle.close).filter(Boolean)
-    : [];
-
-  if (candles.length > 2) return candles;
-
-  const start = asset.price / (1 + (asset.change || 0) / 100);
-  return Array.from({ length: 32 }, (_, index) => {
-    const progress = index / 31;
-    const wave = Math.sin(index * 0.75) * asset.price * 0.004;
-    return start + (asset.price - start) * progress + wave;
-  });
-}
-
-function LocalChart({ asset }) {
-  const prices = buildChartPoints(asset);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const range = max - min || 1;
-  const points = prices
-    .map((price, index) => {
-      const x = (index / Math.max(prices.length - 1, 1)) * 100;
-      const y = 100 - ((price - min) / range) * 100;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
-  const up = prices[prices.length - 1] >= prices[0];
-
-  return (
-    <div className="local-chart">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id={`chartFill-${asset.symbol.replace(/\W/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={up ? '#7bc44a' : '#e07070'} stopOpacity="0.32" />
-            <stop offset="100%" stopColor={up ? '#7bc44a' : '#e07070'} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`0,100 ${points} 100,100`}
-          fill={`url(#chartFill-${asset.symbol.replace(/\W/g, '')})`}
-        />
-        <polyline
-          points={points}
-          fill="none"
-          stroke={up ? '#7bc44a' : '#e07070'}
-          strokeWidth="1.8"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      <div className="local-chart-overlay">
-        <div>
-          <span className="chart-kicker">{asset.symbol}</span>
-          <strong>{formatPrice(asset)}</strong>
-        </div>
-        <span className={up ? 'up' : 'dn'}>{up ? '+' : ''}{asset.change}%</span>
-      </div>
-    </div>
-  );
-}
-
-function TradingViewChart({ asset }) {
-  const containerRef = useRef(null);
-  const [chartMode, setChartMode] = useState('local');
-  const [blocked, setBlocked] = useState(false);
-  const tradingViewSymbol = toTradingViewSymbol(asset.symbol);
-  const dataStatus = getTradingViewDataStatus(asset);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (chartMode !== 'tradingview') return;
-
-    containerRef.current.innerHTML = '';
-    setBlocked(false);
-
-    const widget = document.createElement('div');
-    widget.className = 'tradingview-widget-container__widget';
-    widget.style.height = '100%';
-    widget.style.width = '100%';
-
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.onerror = () => {
-      setBlocked(true);
-      setChartMode('local');
-    };
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: tradingViewSymbol,
-      interval: '60',
-      timezone: 'Etc/UTC',
-      theme: 'dark',
-      style: '1',
-      locale: 'en',
-      allow_symbol_change: true,
-      calendar: false,
-      details: false,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false,
-      hide_legend: false,
-      hide_volume: false,
-      save_image: false,
-      support_host: 'https://www.tradingview.com',
-      backgroundColor: '#18181c',
-      gridColor: 'rgba(255, 255, 255, 0.06)',
-    });
-
-    containerRef.current.appendChild(widget);
-    containerRef.current.appendChild(script);
-  }, [chartMode, tradingViewSymbol]);
-
-  return (
-    <div className="chart-panel">
-      <div className="panel-header">
-        <div className="panel-title">
-          Market Chart
-          <span className="phase-pill chart-pill">{chartMode === 'tradingview' ? tradingViewSymbol : 'LOCAL'}</span>
-          <span className={`phase-pill data-pill ${dataStatus.tone}`}>{dataStatus.label}</span>
-        </div>
-        <div className="chart-controls">
-          <button
-            className={`chart-toggle ${chartMode === 'local' ? 'active' : ''}`}
-            onClick={() => setChartMode('local')}
-          >
-            Local
-          </button>
-          <button
-            className={`chart-toggle ${chartMode === 'tradingview' ? 'active' : ''}`}
-            onClick={() => setChartMode('tradingview')}
-          >
-            TV
-          </button>
-        </div>
-      </div>
-      {chartMode === 'tradingview' ? (
-        <div className="tradingview-widget-container" ref={containerRef} />
-      ) : (
-        <div className="chart-surface">
-          <LocalChart asset={asset} />
-          {blocked && <div className="chart-blocked">TradingView blocked</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main App ─────────────────────────────────
 export default function App() {
-  const [assets, setAssets] = useState(ASSETS);
+  const {
+    assets,
+    marketStatus,
+    marketReady,
+    hasStaleAssets,
+    dismissStale,
+    setDismissStale,
+    fearAndGreed,
+    refreshNow,
+  } = useMarketData(ASSETS);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [phase, setPhase] = useState(2);
   const [messages, setMessages] = useState(() => {
@@ -244,23 +87,18 @@ export default function App() {
   const [riskLevel, setRiskLevel] = useState(null);
   const [lastSignal, setLastSignal] = useState(null);
   const [trades, setTrades] = useState(() => loadTrades());
-  const [fearAndGreed, setFearAndGreed] = useState(null);
   const [headlines, setHeadlines] = useState([]);
   const [headlinesLoading, setHeadlinesLoading] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [alerts, setAlerts] = useState(() => loadAlerts());
-  const [dismissStale, setDismissStale] = useState(false);
-  const [marketReady, setMarketReady] = useState(false);
-  const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
   const [latestTrace, setLatestTrace] = useState(null);
   const chatRef = useRef(null);
-  const assetsRef = useRef(ASSETS);
-  const triggeredAlertsRef = useRef(new Set());
   const { analyze, provider } = useAI();
 
   const asset = assets[selectedIdx] || assets[0];
-  const hasStaleAssets = assets.some(item => item.stale);
+  useAlertChecker({ alerts, assets });
+  useKeyboardShortcuts({ assets, compareMode, setCompareMode, setPhase, setSelectedIdx });
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -273,29 +111,6 @@ export default function App() {
       // Session storage can be unavailable; chat still works in memory.
     }
   }, [messages]);
-
-  useEffect(() => {
-    assetsRef.current = assets;
-  }, [assets]);
-
-  useEffect(() => {
-    alerts.forEach((alert, index) => {
-      const currentAsset = assets.find(item => item.symbol === alert.symbol);
-      const currentPrice = Number(currentAsset?.price);
-      const threshold = Number(alert.price);
-      const triggered = alert.direction === 'above'
-        ? currentPrice >= threshold
-        : currentPrice <= threshold;
-      const key = `${index}:${alert.symbol}:${alert.direction}:${alert.price}`;
-
-      if (Number.isFinite(currentPrice) && Number.isFinite(threshold) && triggered && !triggeredAlertsRef.current.has(key)) {
-        triggeredAlertsRef.current.add(key);
-        console.log('Alert triggered:', alert);
-      } else if (!triggered) {
-        triggeredAlertsRef.current.delete(key);
-      }
-    });
-  }, [assets, alerts]);
 
   const refreshHeadlines = useCallback(async (symbol = asset.symbol) => {
     setHeadlinesLoading(true);
@@ -313,89 +128,6 @@ export default function App() {
     }, 400);
     return () => clearTimeout(timer);
   }, [selectedIdx, asset.symbol, refreshHeadlines]);
-
-  useEffect(() => {
-    function handleKeydown(event) {
-      const target = event.target;
-      const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT';
-      if (isTyping) return;
-
-      if (event.key === 'c') {
-        setCompareMode(value => !value);
-      } else if (event.key === 'Escape' && compareMode) {
-        setCompareMode(false);
-      } else if (['1', '2', '3'].includes(event.key)) {
-        setPhase(Number(event.key));
-      } else if (event.key === 'ArrowLeft') {
-        setSelectedIdx(index => (index - 1 + assets.length) % assets.length);
-      } else if (event.key === 'ArrowRight') {
-        setSelectedIdx(index => (index + 1) % assets.length);
-      }
-    }
-
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
-  }, [assets.length, compareMode]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refreshMarketData(silent = false) {
-      if (!silent) setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
-
-      try {
-        const [nextAssets, nextFearAndGreed] = await Promise.all([
-          fetchAllMarketData(assetsRef.current),
-          fetchFearAndGreed(),
-        ]);
-        if (cancelled) return;
-
-        setAssets(nextAssets);
-        setFearAndGreed(nextFearAndGreed);
-        refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
-        setDismissStale(false);
-        setMarketReady(true);
-        setMarketStatus({
-          state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
-          updatedAt: new Date().toISOString(),
-          error: nextAssets.filter(nextAsset => nextAsset.stale).map(nextAsset => `${nextAsset.symbol}: ${nextAsset.staleReason || 'stale'}`).join(' · ') || null,
-        });
-      } catch (err) {
-        if (cancelled) return;
-        setMarketStatus(prev => ({ ...prev, state: 'error', error: err.message }));
-      }
-    }
-
-    refreshMarketData();
-    const refreshId = setInterval(() => refreshMarketData(true), 60_000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(refreshId);
-    };
-  }, [refreshHeadlines, selectedIdx]);
-
-  const refreshNow = useCallback(async () => {
-    setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
-    try {
-      const [nextAssets, nextFearAndGreed] = await Promise.all([
-        fetchAllMarketData(assets),
-        fetchFearAndGreed(),
-      ]);
-      setAssets(nextAssets);
-      setFearAndGreed(nextFearAndGreed);
-      refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
-      setDismissStale(false);
-      setMarketReady(true);
-      setMarketStatus({
-        state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
-        updatedAt: new Date().toISOString(),
-        error: nextAssets.filter(nextAsset => nextAsset.stale).map(nextAsset => `${nextAsset.symbol}: ${nextAsset.staleReason || 'stale'}`).join(' · ') || null,
-      });
-    } catch (err) {
-      setMarketStatus(prev => ({ ...prev, state: 'error', error: err.message }));
-    }
-  }, [assets, refreshHeadlines, selectedIdx]);
 
   const clearChat = useCallback(() => {
     setMessages([defaultSystemMsg]);
@@ -602,7 +334,7 @@ export default function App() {
           <div className="main-grid">
 
             <div className="main-column">
-              <TradingViewChart asset={asset} />
+              <ChartPanel asset={asset} />
 
               <ChatPanel
                 asset={asset}

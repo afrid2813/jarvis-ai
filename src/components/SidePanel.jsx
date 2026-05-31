@@ -3,6 +3,7 @@ import { formatPrice } from '../utils/assets';
 import { exportSummary } from '../utils/exportSummary';
 import { AgentRow, SwarmBar } from './AgentSwarmPanel';
 import AlertsPanel from './AlertsPanel';
+import Changelog from './Changelog';
 import HeadlinesPanel from './HeadlinesPanel';
 import RiskMeter from './RiskMeter';
 import SignalBox from './SignalBox';
@@ -178,6 +179,14 @@ export default function SidePanel({
             <div className="metric-label">BB Lower</div>
             <div className="metric-val" style={{ fontSize: '12px' }}>{asset.bollingerBands?.lower ? formatPrice({ price: asset.bollingerBands.lower }) : '—'}</div>
           </div>
+          <div className="metric">
+            <div className="metric-label">Stoch K</div>
+            <div className="metric-val" style={{ fontSize: '12px' }}>{asset.stochRSI?.k != null ? asset.stochRSI.k.toFixed(1) : '—'}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Stoch D</div>
+            <div className="metric-val" style={{ fontSize: '12px' }}>{asset.stochRSI?.d != null ? asset.stochRSI.d.toFixed(1) : '—'}</div>
+          </div>
         </div>
       </div>
 
@@ -196,6 +205,8 @@ export default function SidePanel({
       <button className="send-btn" onClick={() => exportSummary(asset, lastSignal, fearAndGreed, headlines)}>
         Export Summary
       </button>
+
+      <Changelog />
     </div>
   );
 }

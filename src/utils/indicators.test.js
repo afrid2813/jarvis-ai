@@ -1,4 +1,4 @@
-import { calculateBollingerBands, calculateEMA, calculateMACD, calculateRSI, rollingEMA } from './indicators';
+import { calculateBollingerBands, calculateEMA, calculateMACD, calculateRSI, calculateStochasticRSI, rollingEMA } from './indicators';
 
 test('calculateRSI returns a known 5-period RSI', () => {
   expect(calculateRSI([1, 2, 3, 2, 4, 5], 5)).toBe(83);
@@ -32,4 +32,14 @@ test('calculateBollingerBands returns equal bands for a flat series', () => {
   expect(bands.upper).toBe(42);
   expect(bands.middle).toBe(42);
   expect(bands.lower).toBe(42);
+});
+
+test('calculateStochasticRSI returns high k for a strongly rising series', () => {
+  const values = [
+    10, 11, 10, 12, 11, 13, 12, 14, 13, 15, 14, 16, 15, 17, 16,
+    18, 17, 19, 18, 20, 19, 22, 24, 27, 31, 36, 42, 49, 57, 66,
+    76, 87, 99, 112,
+  ];
+
+  expect(calculateStochasticRSI(values).k).toBeGreaterThan(50);
 });

@@ -1,4 +1,4 @@
-# Jarvis AI — Hedge Fund Intelligence Engine
+# Jarvis AI v1.6 — Hedge Fund Intelligence Engine
 
 Jarvis AI is a React + Vercel paper-trading intelligence app with live market data, technical indicators, multi-phase AI analysis, and a self-evolving agent workflow.
 
@@ -6,15 +6,20 @@ Jarvis AI is a React + Vercel paper-trading intelligence app with live market da
 
 ## Features
 
-- Live market data from Binance public crypto feeds and Yahoo Finance chart data
-- Real RSI, MACD, and EMA indicators
+- Live market data from Binance public crypto feeds, Yahoo Finance chart data, and EUR/USD exchange rates
+- Real RSI, MACD, EMA, Bollinger Bands, and Stoch RSI indicators
+- Candle snapshot summaries with volume profile context
 - 3-phase AI analysis: Beginner, Analyst, and Hedge Fund
 - Multi-agent swarm analysis in Phase 3
 - Self-Evolving OS with local strategy traces and agent scoring
 - Fear & Greed index
-- News Agent headlines through NewsAPI
-- Trade journal with P&L tracking
-- CSV export for recorded signals
+- News Agent headlines through a server-side NewsAPI proxy
+- Trade journal with P&L tracking and CSV export
+- Price Alerts with local persistence
+- Compare mode for multi-asset scanning
+- Keyboard Shortcuts for compare, mode switching, and asset cycling
+- Stale Data Banner for degraded market feeds
+- Analysis Summary Export as a plain-text report
 - Vercel serverless AI proxy so provider keys stay off the browser bundle
 
 ---
@@ -87,20 +92,46 @@ NEWS_KEY=your_newsapi_key_here
 
 ---
 
-## Project Structure
+## Architecture
 
 ```text
 jarvis/
 ├── api/
-│   └── chat.js
+│   ├── chat.js
+│   └── news.js
 ├── public/
 │   └── index.html
 ├── src/
 │   ├── components/
+│   │   ├── AgentSwarmPanel.jsx
+│   │   ├── AlertsPanel.jsx
+│   │   ├── Changelog.jsx
+│   │   ├── ChartPanel.jsx
+│   │   ├── ChatPanel.jsx
+│   │   ├── CompareTable.jsx
+│   │   ├── ErrorBoundary.jsx
+│   │   ├── HeadlinesPanel.jsx
+│   │   ├── RiskMeter.jsx
+│   │   ├── SidePanel.jsx
+│   │   ├── SignalBox.jsx
+│   │   ├── TickerCard.jsx
+│   │   └── TradeJournal.jsx
 │   ├── hooks/
+│   │   ├── useAI.js
+│   │   ├── useAlertChecker.js
+│   │   ├── useKeyboardShortcuts.js
+│   │   └── useMarketData.js
 │   ├── self-evolving-os/
+│   │   └── selfEvolvingOS.js
 │   ├── services/
+│   │   └── marketData.js
 │   ├── utils/
+│   │   ├── assets.js
+│   │   ├── exportSummary.js
+│   │   ├── exportSummary.test.js
+│   │   ├── indicators.js
+│   │   ├── indicators.test.js
+│   │   └── prompts.js
 │   ├── App.css
 │   ├── App.js
 │   └── index.js
@@ -108,6 +139,14 @@ jarvis/
 ├── package.json
 ├── README.md
 └── vercel.json
+```
+
+---
+
+## Running Tests
+
+```bash
+npm test
 ```
 
 ---

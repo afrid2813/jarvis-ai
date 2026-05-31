@@ -72,6 +72,7 @@ RSI: ${asset.rsi}
 MACD: ${asset.macd}
 EMA Trend: ${asset.ema}
 Bollinger Bands: ${asset.bollingerBands ? `Upper ${formatOptionalPrice(asset.bollingerBands.upper)} / Mid ${formatOptionalPrice(asset.bollingerBands.middle)} / Lower ${formatOptionalPrice(asset.bollingerBands.lower)}` : 'Unavailable'}
+Stoch RSI: ${asset.stochRSI ? `K: ${asset.stochRSI.k.toFixed(1)} / D: ${asset.stochRSI.d.toFixed(1)}` : 'Unavailable'}
 Trend Direction: ${asset.trend}
 24h Volume: ${asset.volume}
 Market Type: ${asset.market}
@@ -96,6 +97,8 @@ NON-NEGOTIABLE RULES:
 - Avoid recommending trades with confidence below 60%
 - If computed confidence is below 55%, override action to WAIT automatically and state "Confidence below threshold — defaulting to WAIT."
 - Never output a BUY or SELL signal with confidence below 60%.
+- If Stoch RSI K > 80, consider overbought — avoid BUY signals unless strong volume confirmation.
+- If Stoch RSI K < 20, consider oversold — avoid SELL signals unless breakdown is confirmed.
 - Prefer WAIT over risky or unclear setups
 - No hype, no emotional language
 - This is PAPER TRADING / SIMULATION ONLY — educational purposes
@@ -149,11 +152,31 @@ function buildCandleSummary(asset) {
   const averageVolume = volumes.length
     ? volumes.reduce((sum, value) => sum + value, 0) / volumes.length
     : 0;
+  const volumeBuckets = splitIntoBuckets(snapshot, 3).map(bucket => {
+    const bucketVolumes = bucket.map(candle => candle.volume || candle.quoteVolume || 0).filter(Number.isFinite);
+    return bucketVolumes.length
+      ? bucketVolumes.reduce((sum, value) => sum + value, 0) / bucketVolumes.length
+      : 0;
+  });
+  const volumeTrend = volumeBuckets[2] > volumeBuckets[1] && volumeBuckets[1] > volumeBuckets[0]
+    ? 'increasing'
+    : volumeBuckets[2] < volumeBuckets[1] && volumeBuckets[1] < volumeBuckets[0]
+      ? 'decreasing'
+      : 'flat';
 
   return [
     ...lines,
     `Snapshot summary: High ${round(high)} / Low ${round(low)} / Avg Vol ${round(averageVolume)} / Last 3 candles: ${streak}`,
+    `Volume profile: Early ${round(volumeBuckets[0])} / Mid ${round(volumeBuckets[1])} / Recent ${round(volumeBuckets[2])} / Trend: ${volumeTrend}`,
   ].join('\n');
+}
+
+function splitIntoBuckets(values, bucketCount) {
+  return Array.from({ length: bucketCount }, (_, index) => {
+    const start = Math.floor((index * values.length) / bucketCount);
+    const end = Math.floor(((index + 1) * values.length) / bucketCount);
+    return values.slice(start, end);
+  });
 }
 
 function round(value) {
