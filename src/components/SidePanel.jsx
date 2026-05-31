@@ -1,12 +1,14 @@
 import React from 'react';
 import { formatPrice } from '../utils/assets';
+import { exportSummary } from '../utils/exportSummary';
 import { AgentRow, SwarmBar } from './AgentSwarmPanel';
+import AlertsPanel from './AlertsPanel';
 import HeadlinesPanel from './HeadlinesPanel';
 import RiskMeter from './RiskMeter';
 import SignalBox from './SignalBox';
 import TradeJournal from './TradeJournal';
 
-function EvolutionOSPanel({ state, latestTrace }) {
+const EvolutionOSPanel = React.memo(function EvolutionOSPanel({ state, latestTrace }) {
   const topAgents = Object.entries(state.agentScores)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
@@ -54,7 +56,7 @@ function EvolutionOSPanel({ state, latestTrace }) {
       )}
     </div>
   );
-}
+});
 
 export default function SidePanel({
   phase,
@@ -73,6 +75,10 @@ export default function SidePanel({
   headlines,
   refreshHeadlines,
   headlinesLoading,
+  alerts,
+  addAlert,
+  removeAlert,
+  fearAndGreed,
 }) {
   return (
     <div className="side-panel">
@@ -164,6 +170,14 @@ export default function SidePanel({
             <div className="metric-label">Source</div>
             <div className="metric-val" style={{ fontSize: '11px' }}>{asset.dataSource || 'fallback'}</div>
           </div>
+          <div className="metric">
+            <div className="metric-label">BB Upper</div>
+            <div className="metric-val" style={{ fontSize: '12px' }}>{asset.bollingerBands?.upper ? formatPrice({ price: asset.bollingerBands.upper }) : '—'}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">BB Lower</div>
+            <div className="metric-val" style={{ fontSize: '12px' }}>{asset.bollingerBands?.lower ? formatPrice({ price: asset.bollingerBands.lower }) : '—'}</div>
+          </div>
         </div>
       </div>
 
@@ -173,9 +187,15 @@ export default function SidePanel({
         loading={headlinesLoading}
       />
 
+      <AlertsPanel alerts={alerts} assets={assets} onAdd={addAlert} onRemove={removeAlert} />
+
       <SignalBox lastSignal={lastSignal} />
 
       <TradeJournal trades={trades} assets={assets} />
+
+      <button className="send-btn" onClick={() => exportSummary(asset, lastSignal, fearAndGreed, headlines)}>
+        Export Summary
+      </button>
     </div>
   );
 }

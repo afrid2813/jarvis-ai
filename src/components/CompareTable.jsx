@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatPrice } from '../utils/assets';
 
-export default function CompareTable({ assets, selectedIdx, onSelect }) {
+function CompareTable({ assets, selectedIdx, onSelect }) {
   return (
     <div className="card">
       <div className="card-title">Asset Comparison</div>
@@ -40,3 +40,5 @@ export default function CompareTable({ assets, selectedIdx, onSelect }) {
     </div>
   );
 }
+
+export default React.memo(CompareTable);

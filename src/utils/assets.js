@@ -94,3 +94,20 @@ export function formatPrice(asset) {
 export function getAssetsByMarket(market) {
   return ASSETS.filter(asset => asset.market === market);
 }
+
+export function saveAlerts(alerts) {
+  try {
+    window.localStorage.setItem('jarvis.alerts.v1', JSON.stringify(alerts));
+  } catch {
+    // Alerts remain in memory when localStorage is unavailable.
+  }
+}
+
+export function loadAlerts() {
+  try {
+    const alerts = JSON.parse(window.localStorage.getItem('jarvis.alerts.v1'));
+    return Array.isArray(alerts) ? alerts : [];
+  } catch {
+    return [];
+  }
+}

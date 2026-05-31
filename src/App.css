@@ -448,6 +448,16 @@ body {
 }
 .chat-input:focus { outline: none; border-color: var(--blue); }
 .input-hint { font-size: 11px; color: var(--t); opacity: 0.45; margin-top: 4px; }
+.stale-banner {
+  background: var(--color-background-warning, #3a2e00);
+  color: var(--color-text-warning, #f0b429);
+  font-size: 13px;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.kbd-legend { font-size: 11px; opacity: 0.35; text-align: center; padding: 6px 0 12px; color: var(--t); }
 .send-btn {
   padding: 8px 16px;
   font-size: 13px;

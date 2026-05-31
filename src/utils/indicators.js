@@ -69,6 +69,21 @@ export function calculateMACD(closes) {
   };
 }
 
+export function calculateBollingerBands(closes, period = 20, stdDevMultiplier = 2) {
+  if (closes.length < period) return null;
+
+  const slice = closes.slice(-period);
+  const middle = slice.reduce((sum, value) => sum + value, 0) / period;
+  const variance = slice.reduce((sum, value) => sum + ((value - middle) ** 2), 0) / period;
+  const stdDev = Math.sqrt(variance);
+
+  return {
+    upper: middle + stdDevMultiplier * stdDev,
+    middle,
+    lower: middle - stdDevMultiplier * stdDev,
+  };
+}
+
 export function calculatePriceLevels(candles) {
   if (!candles || candles.length < 10) return {};
 

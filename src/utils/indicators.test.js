@@ -1,4 +1,4 @@
-import { calculateEMA, calculateMACD, calculateRSI, rollingEMA } from './indicators';
+import { calculateBollingerBands, calculateEMA, calculateMACD, calculateRSI, rollingEMA } from './indicators';
 
 test('calculateRSI returns a known 5-period RSI', () => {
   expect(calculateRSI([1, 2, 3, 2, 4, 5], 5)).toBe(83);
@@ -24,4 +24,12 @@ test('rollingEMA preserves array length and starts with null warmup values', () 
   expect(result[0]).toBeNull();
   expect(result[1]).toBeNull();
   expect(result[2]).not.toBeNull();
+});
+
+test('calculateBollingerBands returns equal bands for a flat series', () => {
+  const bands = calculateBollingerBands(Array(20).fill(42));
+
+  expect(bands.upper).toBe(42);
+  expect(bands.middle).toBe(42);
+  expect(bands.lower).toBe(42);
 });

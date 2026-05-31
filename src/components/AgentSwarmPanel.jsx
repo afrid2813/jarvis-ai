@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function AgentRow({ agent, status }) {
+function AgentRowBase({ agent, status }) {
   return (
     <div className="agent-row">
       <div className="agent-left">
@@ -15,7 +15,7 @@ export function AgentRow({ agent, status }) {
   );
 }
 
-export function SwarmBar({ agent, value, index }) {
+function SwarmBarBase({ agent, value, index }) {
   const colors = ['#185FA5','#3B6D11','#993C1D','#854F0B','#A32D2D','#0F6E56','#534AB7'];
 
   return (
@@ -31,3 +31,6 @@ export function SwarmBar({ agent, value, index }) {
     </div>
   );
 }
+
+export const AgentRow = React.memo(AgentRowBase);
+export const SwarmBar = React.memo(SwarmBarBase);

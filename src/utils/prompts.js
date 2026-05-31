@@ -71,6 +71,7 @@ Price: ${formatPrice(asset)}
 RSI: ${asset.rsi}
 MACD: ${asset.macd}
 EMA Trend: ${asset.ema}
+Bollinger Bands: ${asset.bollingerBands ? `Upper ${formatOptionalPrice(asset.bollingerBands.upper)} / Mid ${formatOptionalPrice(asset.bollingerBands.middle)} / Lower ${formatOptionalPrice(asset.bollingerBands.lower)}` : 'Unavailable'}
 Trend Direction: ${asset.trend}
 24h Volume: ${asset.volume}
 Market Type: ${asset.market}

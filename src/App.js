@@ -1,8 +1,8 @@
 // src/App.js
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useAI } from './hooks/useAI';
 import { buildSystemPrompt } from './utils/prompts';
-import { ASSETS, AGENTS, formatPrice } from './utils/assets';
+import { ASSETS, AGENTS, formatPrice, loadAlerts, saveAlerts } from './utils/assets';
 import { fetchAllMarketData, fetchFearAndGreed, fetchNewsHeadlines } from './services/marketData';
 import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
@@ -248,15 +248,19 @@ export default function App() {
   const [headlines, setHeadlines] = useState([]);
   const [headlinesLoading, setHeadlinesLoading] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [alerts, setAlerts] = useState(() => loadAlerts());
+  const [dismissStale, setDismissStale] = useState(false);
   const [marketReady, setMarketReady] = useState(false);
   const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
   const [latestTrace, setLatestTrace] = useState(null);
   const chatRef = useRef(null);
   const assetsRef = useRef(ASSETS);
+  const triggeredAlertsRef = useRef(new Set());
   const { analyze, provider } = useAI();
 
   const asset = assets[selectedIdx] || assets[0];
+  const hasStaleAssets = assets.some(item => item.stale);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -275,11 +279,63 @@ export default function App() {
   }, [assets]);
 
   useEffect(() => {
+    alerts.forEach((alert, index) => {
+      const currentAsset = assets.find(item => item.symbol === alert.symbol);
+      const currentPrice = Number(currentAsset?.price);
+      const threshold = Number(alert.price);
+      const triggered = alert.direction === 'above'
+        ? currentPrice >= threshold
+        : currentPrice <= threshold;
+      const key = `${index}:${alert.symbol}:${alert.direction}:${alert.price}`;
+
+      if (Number.isFinite(currentPrice) && Number.isFinite(threshold) && triggered && !triggeredAlertsRef.current.has(key)) {
+        triggeredAlertsRef.current.add(key);
+        console.log('Alert triggered:', alert);
+      } else if (!triggered) {
+        triggeredAlertsRef.current.delete(key);
+      }
+    });
+  }, [assets, alerts]);
+
+  const refreshHeadlines = useCallback(async (symbol = asset.symbol) => {
+    setHeadlinesLoading(true);
+    try {
+      const result = await fetchNewsHeadlines(symbol);
+      setHeadlines(result || []);
+    } finally {
+      setHeadlinesLoading(false);
+    }
+  }, [asset.symbol]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
-      fetchNewsHeadlines(asset.symbol).then(result => setHeadlines(result || []));
+      refreshHeadlines(asset.symbol);
     }, 400);
     return () => clearTimeout(timer);
-  }, [selectedIdx]);
+  }, [selectedIdx, asset.symbol, refreshHeadlines]);
+
+  useEffect(() => {
+    function handleKeydown(event) {
+      const target = event.target;
+      const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT';
+      if (isTyping) return;
+
+      if (event.key === 'c') {
+        setCompareMode(value => !value);
+      } else if (event.key === 'Escape' && compareMode) {
+        setCompareMode(false);
+      } else if (['1', '2', '3'].includes(event.key)) {
+        setPhase(Number(event.key));
+      } else if (event.key === 'ArrowLeft') {
+        setSelectedIdx(index => (index - 1 + assets.length) % assets.length);
+      } else if (event.key === 'ArrowRight') {
+        setSelectedIdx(index => (index + 1) % assets.length);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [assets.length, compareMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,6 +353,7 @@ export default function App() {
         setAssets(nextAssets);
         setFearAndGreed(nextFearAndGreed);
         refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
+        setDismissStale(false);
         setMarketReady(true);
         setMarketStatus({
           state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -316,9 +373,9 @@ export default function App() {
       cancelled = true;
       clearInterval(refreshId);
     };
-  }, []);
+  }, [refreshHeadlines, selectedIdx]);
 
-  async function refreshNow() {
+  const refreshNow = useCallback(async () => {
     setMarketStatus(prev => ({ ...prev, state: 'loading', error: null }));
     try {
       const [nextAssets, nextFearAndGreed] = await Promise.all([
@@ -328,6 +385,7 @@ export default function App() {
       setAssets(nextAssets);
       setFearAndGreed(nextFearAndGreed);
       refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
+      setDismissStale(false);
       setMarketReady(true);
       setMarketStatus({
         state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -337,26 +395,32 @@ export default function App() {
     } catch (err) {
       setMarketStatus(prev => ({ ...prev, state: 'error', error: err.message }));
     }
-  }
+  }, [assets, refreshHeadlines, selectedIdx]);
 
-  function clearChat() {
+  const clearChat = useCallback(() => {
     setMessages([defaultSystemMsg]);
     try {
       sessionStorage.removeItem('jarvis.chat.v1');
     } catch {
       // Ignore storage failures; the in-memory chat is cleared above.
     }
-  }
+  }, []);
 
-  async function refreshHeadlines(symbol = asset.symbol) {
-    setHeadlinesLoading(true);
-    try {
-      const result = await fetchNewsHeadlines(symbol);
-      setHeadlines(result || []);
-    } finally {
-      setHeadlinesLoading(false);
-    }
-  }
+  const addAlert = useCallback((alert) => {
+    setAlerts(prev => {
+      const next = [...prev, alert];
+      saveAlerts(next);
+      return next;
+    });
+  }, []);
+
+  const removeAlert = useCallback((index) => {
+    setAlerts(prev => {
+      const next = prev.filter((_, itemIndex) => itemIndex !== index);
+      saveAlerts(next);
+      return next;
+    });
+  }, []);
 
   const quickButtons = {
     1: ['What is ' + asset.symbol.split('/')[0] + '?', 'How does RSI work?', 'What is a stop loss?', 'Explain crypto basics'],
@@ -364,7 +428,7 @@ export default function App() {
     3: ['Full swarm analysis on ' + asset.symbol, 'Multi-factor risk report', 'Entry + exit strategy', 'Fear/greed + technicals'],
   };
 
-  async function send(text) {
+  const send = useCallback(async (text) => {
     const msg = (text || input).trim();
     if (!msg || loading) return;
     setInput('');
@@ -460,7 +524,7 @@ export default function App() {
     if (agentTimer) clearInterval(agentTimer);
     setAgentActive(-1);
     setLoading(false);
-  }
+  }, [analyze, asset, evolutionState, fearAndGreed, headlines, history, input, loading, phase]);
 
   const phaseLabels = { 1: '🟢 Beginner', 2: '🟡 Analyst', 3: '🔴 Hedge Fund' };
   const marketBadge = marketStatus.state === 'loading'
@@ -470,6 +534,17 @@ export default function App() {
       : marketStatus.state === 'warning'
         ? 'Some feeds stale'
         : `Updated ${formatUpdateTime(marketStatus.updatedAt)}`;
+  const tickerCards = useMemo(() => assets.map((a, i) => (
+    <TickerCard
+      key={a.symbol}
+      asset={a}
+      selected={i === selectedIdx}
+      onClick={() => setSelectedIdx(i)}
+    />
+  )), [assets, selectedIdx]);
+  const refreshSelectedHeadlines = useCallback(() => {
+    refreshHeadlines(asset.symbol);
+  }, [asset.symbol, refreshHeadlines]);
 
   return (
     <div className="app">
@@ -495,6 +570,13 @@ export default function App() {
         </div>
       </header>
 
+      {hasStaleAssets && !dismissStale && (
+        <div className="stale-banner">
+          <span>⚠ Some market data is stale — prices may not reflect current market.</span>
+          <button className="quick-btn" onClick={() => setDismissStale(true)}>Dismiss</button>
+        </div>
+      )}
+
       {!marketReady ? (
         <div className="skeleton-wrap">
           {Array.from({ length: 6 }, (_, index) => (
@@ -505,14 +587,7 @@ export default function App() {
         <>
           {/* Tickers */}
           <div className="tickers">
-            {assets.map((a, i) => (
-              <TickerCard
-                key={a.symbol}
-                asset={a}
-                selected={i === selectedIdx}
-                onClick={() => setSelectedIdx(i)}
-              />
-            ))}
+            {tickerCards}
           </div>
 
           {compareMode && (
@@ -558,8 +633,12 @@ export default function App() {
               trades={trades}
               assets={assets}
               headlines={headlines}
-              refreshHeadlines={() => refreshHeadlines(asset.symbol)}
+              refreshHeadlines={refreshSelectedHeadlines}
               headlinesLoading={headlinesLoading}
+              alerts={alerts}
+              addAlert={addAlert}
+              removeAlert={removeAlert}
+              fearAndGreed={fearAndGreed}
             />
           </div>
         </>
@@ -568,6 +647,7 @@ export default function App() {
       <div className="disclaimer">
         ⚠ Paper trading simulation only · Not financial advice · Never risk capital you cannot afford to lose
       </div>
+      <div className="kbd-legend">C — compare · 1/2/3 — mode · ← → — asset · Esc — close</div>
     </div>
   );
 }
