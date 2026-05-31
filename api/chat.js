@@ -17,7 +17,7 @@
 import { applyCors, assertReasonableBody, createMemoryRateLimiter, fetchJsonWithTimeout, getClientIp, logError } from './_shared.js';
 
 const PROVIDER = process.env.AI_PROVIDER || 'groq';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-70b-8192';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
 const PROVIDER_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 15_000);
 const INSTANCE_HOURLY_LIMIT = Number(process.env.AI_INSTANCE_HOURLY_LIMIT || 300);
