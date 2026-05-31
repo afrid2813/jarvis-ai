@@ -111,3 +111,20 @@ export function loadAlerts() {
     return [];
   }
 }
+
+export function loadWatchlist() {
+  try {
+    const watchlist = JSON.parse(window.localStorage.getItem('jarvis.watchlist.v1'));
+    return Array.isArray(watchlist) ? watchlist : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveWatchlist(list) {
+  try {
+    window.localStorage.setItem('jarvis.watchlist.v1', JSON.stringify(list));
+  } catch {
+    // Watchlist remains in memory when localStorage is unavailable.
+  }
+}

@@ -14,6 +14,8 @@
 //   AI_PROVIDER = groq   (or: anthropic)
 // ─────────────────────────────────────────────
 
+import { kv } from '@vercel/kv';
+
 const PROVIDER = process.env.AI_PROVIDER || 'groq';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-70b-8192';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
@@ -24,7 +26,31 @@ const rateLimits = new Map();
 const MAX_REQUESTS = 10;
 const WINDOW_MS = 60 * 1000; // 1 minute
 
-function checkRateLimit(ip) {
+function getIp(req) {
+  return req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+}
+
+function logError({ path, ip, err }) {
+  console.error(JSON.stringify({
+    ts: new Date().toISOString(),
+    path,
+    ip,
+    error: err.message,
+  }));
+}
+
+async function checkRateLimit(ip) {
+  try {
+    const key = `ratelimit:${ip}`;
+    const count = await kv.incr(key);
+    if (count === 1) await kv.expire(key, 60);
+    return count <= MAX_REQUESTS;
+  } catch {
+    return checkMemoryRateLimit(ip);
+  }
+}
+
+function checkMemoryRateLimit(ip) {
   const now = Date.now();
   const record = rateLimits.get(ip) || { count: 0, start: now };
 
@@ -49,40 +75,39 @@ function sanitizeMessages(messages) {
 }
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin;
-
-  if (origin !== ALLOWED_ORIGIN) {
-    return res.status(403).json({ error: 'Forbidden origin' });
-  }
-
-  // CORS headers — allow only the configured frontend origin
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // Rate limiting
-  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
-  if (!checkRateLimit(ip)) {
-    return res.status(429).json({ error: 'Too many requests. Wait a minute and try again.' });
-  }
-
-  const { messages, systemPrompt } = req.body;
-
-  if (!Array.isArray(messages) || typeof systemPrompt !== 'string') {
-    return res.status(400).json({ error: 'Missing messages or systemPrompt' });
-  }
-
-  if (messages.length > 20 || systemPrompt.length > 8000) {
-    return res.status(400).json({ error: 'Request too large' });
-  }
-
-  const sanitizedMessages = sanitizeMessages(messages);
+  const ip = getIp(req);
 
   try {
+    const origin = req.headers.origin;
+
+    if (origin !== ALLOWED_ORIGIN) {
+      return res.status(403).json({ error: 'Forbidden origin' });
+    }
+
+    // CORS headers — allow only the configured frontend origin
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+    if (!(await checkRateLimit(ip))) {
+      return res.status(429).json({ error: 'Too many requests. Wait a minute and try again.' });
+    }
+
+    const { messages, systemPrompt } = req.body;
+
+    if (!Array.isArray(messages) || typeof systemPrompt !== 'string') {
+      return res.status(400).json({ error: 'Missing messages or systemPrompt' });
+    }
+
+    if (messages.length > 20 || systemPrompt.length > 8000) {
+      return res.status(400).json({ error: 'Request too large' });
+    }
+
+    const sanitizedMessages = sanitizeMessages(messages);
     let text = '';
 
     if (PROVIDER === 'groq') {
@@ -133,7 +158,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ text });
 
   } catch (err) {
-    console.error('API proxy error:', err.message);
-    return res.status(500).json({ error: err.message });
+    logError({ path: '/api/chat', ip, err });
+    return res.status(500).json({ error: 'Internal error' });
   }
 }

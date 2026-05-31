@@ -17,7 +17,12 @@ async function callProxy(messages, systemPrompt) {
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `Proxy error: ${res.status}`);
+  if (data.error) {
+    const err = new Error(data.error);
+    err.systemMessage = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
 
   return data.text || '';
 }

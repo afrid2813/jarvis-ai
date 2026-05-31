@@ -1,19 +1,21 @@
 // src/App.js
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { Suspense, lazy, useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useAlertChecker } from './hooks/useAlertChecker';
 import { useAI } from './hooks/useAI';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useMarketData } from './hooks/useMarketData';
 import { buildSystemPrompt } from './utils/prompts';
-import { ASSETS, AGENTS, loadAlerts, saveAlerts } from './utils/assets';
+import { ASSETS, AGENTS, loadAlerts, loadWatchlist, saveAlerts, saveWatchlist } from './utils/assets';
 import { fetchNewsHeadlines } from './services/marketData';
 import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
 import ChartPanel from './components/ChartPanel';
 import ChatPanel from './components/ChatPanel';
-import CompareTable from './components/CompareTable';
 import SidePanel from './components/SidePanel';
 import './App.css';
+
+const CompareTable = lazy(() => import('./components/CompareTable'));
+const selectAssetBySymbol = (assets, symbol) => Math.max(0, assets.findIndex(item => item.symbol === symbol));
 
 const defaultSystemMsg = {
   role: 'system',
@@ -91,6 +93,7 @@ export default function App() {
   const [headlinesLoading, setHeadlinesLoading] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [alerts, setAlerts] = useState(() => loadAlerts());
+  const [watchlist, setWatchlist] = useState(() => loadWatchlist());
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
   const [latestTrace, setLatestTrace] = useState(null);
   const chatRef = useRef(null);
@@ -99,6 +102,15 @@ export default function App() {
   const asset = assets[selectedIdx] || assets[0];
   useAlertChecker({ alerts, assets });
   useKeyboardShortcuts({ assets, compareMode, setCompareMode, setPhase, setSelectedIdx });
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      const register = () => navigator.serviceWorker.register('/sw.js').catch(() => {});
+      window.addEventListener('load', register);
+      return () => window.removeEventListener('load', register);
+    }
+    return undefined;
+  }, []);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -150,6 +162,23 @@ export default function App() {
     setAlerts(prev => {
       const next = prev.filter((_, itemIndex) => itemIndex !== index);
       saveAlerts(next);
+      return next;
+    });
+  }, []);
+
+  const addToWatchlist = useCallback((symbol = asset.symbol) => {
+    setWatchlist(prev => {
+      if (prev.includes(symbol)) return prev;
+      const next = [...prev, symbol].slice(0, 10);
+      saveWatchlist(next);
+      return next;
+    });
+  }, [asset.symbol]);
+
+  const removeFromWatchlist = useCallback((symbol) => {
+    setWatchlist(prev => {
+      const next = prev.filter(item => item !== symbol);
+      saveWatchlist(next);
       return next;
     });
   }, []);
@@ -234,8 +263,10 @@ export default function App() {
       setLatestTrace(cycle.trace);
     } catch (err) {
       setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `**Error:** ${err.message}\n\nJarvis now sends AI requests through \`/api/chat\`. Check that the Vercel/serverless proxy is running and the provider keys are set as server environment variables.`,
+        role: err.systemMessage ? 'system' : 'assistant',
+        content: err.systemMessage
+          ? err.message
+          : `**Error:** ${err.message}\n\nJarvis now sends AI requests through \`/api/chat\`. Check that the Vercel/serverless proxy is running and the provider keys are set as server environment variables.`,
         tag: 'Jarvis · Error',
       }]);
 
@@ -323,11 +354,13 @@ export default function App() {
           </div>
 
           {compareMode && (
-            <CompareTable
-              assets={assets}
-              selectedIdx={selectedIdx}
-              onSelect={setSelectedIdx}
-            />
+            <Suspense fallback={<div className="skeleton-card" />}>
+              <CompareTable
+                assets={assets}
+                selectedIdx={selectedIdx}
+                onSelect={setSelectedIdx}
+              />
+            </Suspense>
           )}
 
           {/* Main layout */}
@@ -370,6 +403,10 @@ export default function App() {
               alerts={alerts}
               addAlert={addAlert}
               removeAlert={removeAlert}
+              watchlist={watchlist}
+              addToWatchlist={addToWatchlist}
+              removeFromWatchlist={removeFromWatchlist}
+              selectAsset={symbol => setSelectedIdx(selectAssetBySymbol(assets, symbol))}
               fearAndGreed={fearAndGreed}
             />
           </div>

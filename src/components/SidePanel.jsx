@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { formatPrice } from '../utils/assets';
 import { exportSummary } from '../utils/exportSummary';
 import { AgentRow, SwarmBar } from './AgentSwarmPanel';
 import AlertsPanel from './AlertsPanel';
-import Changelog from './Changelog';
 import HeadlinesPanel from './HeadlinesPanel';
 import RiskMeter from './RiskMeter';
 import SignalBox from './SignalBox';
-import TradeJournal from './TradeJournal';
+import Watchlist from './Watchlist';
+
+const TradeJournal = lazy(() => import('./TradeJournal'));
+const Changelog = lazy(() => import('./Changelog'));
 
 const EvolutionOSPanel = React.memo(function EvolutionOSPanel({ state, latestTrace }) {
   const topAgents = Object.entries(state.agentScores)
@@ -79,6 +81,10 @@ export default function SidePanel({
   alerts,
   addAlert,
   removeAlert,
+  watchlist,
+  addToWatchlist,
+  removeFromWatchlist,
+  selectAsset,
   fearAndGreed,
 }) {
   return (
@@ -194,6 +200,15 @@ export default function SidePanel({
         </div>
       </div>
 
+      <Watchlist
+        watchlist={watchlist}
+        assets={assets}
+        currentSymbol={asset.symbol}
+        onAdd={addToWatchlist}
+        onRemove={removeFromWatchlist}
+        onSelect={selectAsset}
+      />
+
       <HeadlinesPanel
         headlines={headlines}
         onRefresh={refreshHeadlines}
@@ -204,13 +219,17 @@ export default function SidePanel({
 
       <SignalBox lastSignal={lastSignal} />
 
-      <TradeJournal trades={trades} assets={assets} />
+      <Suspense fallback={<div className="skeleton-card" />}>
+        <TradeJournal trades={trades} assets={assets} />
+      </Suspense>
 
       <button className="send-btn" onClick={() => exportSummary(asset, lastSignal, fearAndGreed, headlines)}>
         Export Summary
       </button>
 
-      <Changelog />
+      <Suspense fallback={<div className="skeleton-card" />}>
+        <Changelog />
+      </Suspense>
     </div>
   );
 }

@@ -57,11 +57,25 @@ function exportCsv(trades) {
 
 export default function TradeJournal({ trades, assets }) {
   const buyTrades = trades.filter(trade => trade.action === 'BUY');
+  const closedBuyPnls = buyTrades
+    .map(trade => calculatePnl(trade, assets))
+    .filter(pnl => pnl != null);
+  const winningPnls = closedBuyPnls.filter(pnl => pnl > 0);
+  const losingPnls = closedBuyPnls.filter(pnl => pnl < 0);
   const wins = buyTrades.filter(trade => {
     const pnl = calculatePnl(trade, assets);
     return pnl != null && pnl > 0;
   }).length;
   const winRate = buyTrades.length ? Math.round((wins / buyTrades.length) * 100) : 0;
+  const hasStats = closedBuyPnls.length >= 2;
+  const statsWinRate = hasStats ? `${Math.round((winningPnls.length / closedBuyPnls.length) * 100)}%` : '—';
+  const avgGain = hasStats && winningPnls.length ? `${average(winningPnls).toFixed(2)}%` : '—';
+  const avgLoss = hasStats && losingPnls.length ? `${average(losingPnls).toFixed(2)}%` : '—';
+  const profitFactor = hasStats
+    ? losingPnls.length
+      ? (Math.abs(sum(winningPnls)) / Math.abs(sum(losingPnls))).toFixed(2)
+      : '∞'
+    : '—';
 
   return (
     <details className="card trade-journal-card" open>
@@ -71,6 +85,25 @@ export default function TradeJournal({ trades, assets }) {
         <div className="no-signal">No signals recorded yet.</div>
       ) : (
         <>
+          <div className="metrics-grid">
+            <div className="metric">
+              <div className="metric-label">Win Rate</div>
+              <div className="metric-val">{statsWinRate}</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">Avg Gain</div>
+              <div className="metric-val up">{avgGain}</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">Avg Loss</div>
+              <div className="metric-val dn">{avgLoss}</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">Profit Factor</div>
+              <div className="metric-val">{profitFactor}</div>
+            </div>
+          </div>
+
           <div className="trade-table-wrap">
             <table className="trade-table">
               <thead>
@@ -123,4 +156,12 @@ export default function TradeJournal({ trades, assets }) {
       )}
     </details>
   );
+}
+
+function average(values) {
+  return sum(values) / values.length;
+}
+
+function sum(values) {
+  return values.reduce((total, value) => total + value, 0);
 }

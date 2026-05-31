@@ -8,6 +8,7 @@ Jarvis AI is a React + Vercel paper-trading intelligence app with live market da
 
 - Live market data from Binance public crypto feeds, Yahoo Finance chart data, and EUR/USD exchange rates
 - Real RSI, MACD, EMA, Bollinger Bands, and Stoch RSI indicators
+- ADX and OBV production indicators
 - Candle snapshot summaries with volume profile context
 - 3-phase AI analysis: Beginner, Analyst, and Hedge Fund
 - Multi-agent swarm analysis in Phase 3
@@ -16,6 +17,7 @@ Jarvis AI is a React + Vercel paper-trading intelligence app with live market da
 - News Agent headlines through a server-side NewsAPI proxy
 - Trade journal with P&L tracking and CSV export
 - Price Alerts with local persistence
+- Watchlist with local persistence
 - Compare mode for multi-asset scanning
 - Keyboard Shortcuts for compare, mode switching, and asset cycling
 - Stale Data Banner for degraded market feeds
@@ -100,7 +102,9 @@ jarvis/
 │   ├── chat.js
 │   └── news.js
 ├── public/
-│   └── index.html
+│   ├── index.html
+│   ├── manifest.json
+│   └── sw.js
 ├── src/
 │   ├── components/
 │   │   ├── AgentSwarmPanel.jsx
@@ -115,7 +119,8 @@ jarvis/
 │   │   ├── SidePanel.jsx
 │   │   ├── SignalBox.jsx
 │   │   ├── TickerCard.jsx
-│   │   └── TradeJournal.jsx
+│   │   ├── TradeJournal.jsx
+│   │   └── Watchlist.jsx
 │   ├── hooks/
 │   │   ├── useAI.js
 │   │   ├── useAlertChecker.js
@@ -136,6 +141,8 @@ jarvis/
 │   ├── App.js
 │   └── index.js
 ├── .env.example
+├── DEPLOYMENT.md
+├── package-lock.json
 ├── package.json
 ├── README.md
 └── vercel.json
@@ -147,6 +154,12 @@ jarvis/
 
 ```bash
 npm test
+```
+
+Run bundle analysis:
+
+```bash
+npm run build && npm run analyze
 ```
 
 ---
