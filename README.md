@@ -59,6 +59,10 @@ npm start
 
 Open http://localhost:3000.
 
+`npm start` runs a local Jarvis proxy so `/api/chat` and `/api/news` work on `http://localhost:3000` without exposing keys in the browser. Use `npm run start:react` only when you want the React UI without API routes, or `npm run start:vercel` when you specifically want Vercel Dev.
+
+For local AI replies, create `.env.local` from `.env.example` and add server-side values like `AI_PROVIDER=groq` and `GROQ_KEY=...`. Never use `REACT_APP_` for secret keys.
+
 ### 4. Deploy To Vercel
 
 1. Push this repo to GitHub.

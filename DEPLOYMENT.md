@@ -25,7 +25,7 @@ npm install
 npm start
 ```
 
-Open http://localhost:3000 and confirm the app loads.
+Open http://localhost:3000 and confirm the app loads. `npm start` runs the local Jarvis proxy so API routes like `/api/chat` are available without a Vercel CLI login. Use `npm run start:vercel` when you specifically want Vercel Dev.
 
 ### 3. Get your API keys
 
