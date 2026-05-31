@@ -39,6 +39,15 @@ function checkRateLimit(ip) {
   return record.count <= MAX_REQUESTS;
 }
 
+function sanitizeMessages(messages) {
+  const blocked = /SYSTEM:|IGNORE PREVIOUS|You are now|Disregard/gi;
+
+  return messages.map(message => ({
+    ...message,
+    content: String(message.content || '').replace(blocked, '').slice(0, 2000),
+  }));
+}
+
 export default async function handler(req, res) {
   const origin = req.headers.origin;
 
@@ -71,6 +80,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Request too large' });
   }
 
+  const sanitizedMessages = sanitizeMessages(messages);
+
   try {
     let text = '';
 
@@ -87,7 +98,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: GROQ_MODEL,
           max_tokens: 1000,
-          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          messages: [{ role: 'system', content: systemPrompt }, ...sanitizedMessages],
         }),
       });
       const data = await r.json();
@@ -109,7 +120,7 @@ export default async function handler(req, res) {
           model: ANTHROPIC_MODEL,
           max_tokens: 1000,
           system: systemPrompt,
-          messages,
+          messages: sanitizedMessages,
         }),
       });
       const data = await r.json();

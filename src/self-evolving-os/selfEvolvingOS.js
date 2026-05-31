@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'jarvis.selfEvolvingOS.v1';
+const TRADE_STORAGE_KEY = 'jarvis.trades.v1';
 const DEFAULT_AGENT_SCORE = 0.5;
 
 const initialState = {
@@ -84,6 +85,33 @@ export function recallBestStrategy(state, task, phase) {
   return state.traces
     .filter(trace => trace.taskType === taskType && trace.success)
     .sort((a, b) => b.reward - a.reward)[0] || null;
+}
+
+export function recordTrade({ symbol, action, confidence, risk, price, timestamp }) {
+  try {
+    const trade = {
+      symbol,
+      action,
+      confidence,
+      risk,
+      price,
+      timestamp: timestamp || new Date().toISOString(),
+    };
+    const trades = [trade, ...loadTrades()].slice(0, 200);
+    window.localStorage.setItem(TRADE_STORAGE_KEY, JSON.stringify(trades));
+    return trade;
+  } catch {
+    return null;
+  }
+}
+
+export function loadTrades() {
+  try {
+    const trades = JSON.parse(window.localStorage.getItem(TRADE_STORAGE_KEY));
+    return Array.isArray(trades) ? trades : [];
+  } catch {
+    return [];
+  }
 }
 
 function readStoredState() {

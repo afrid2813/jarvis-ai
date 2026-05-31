@@ -3,6 +3,7 @@ import { formatPrice } from '../utils/assets';
 import { AgentRow, SwarmBar } from './AgentSwarmPanel';
 import RiskMeter from './RiskMeter';
 import SignalBox from './SignalBox';
+import TradeJournal from './TradeJournal';
 
 function EvolutionOSPanel({ state, latestTrace }) {
   const topAgents = Object.entries(state.agentScores)
@@ -66,6 +67,8 @@ export default function SidePanel({
   riskLevel,
   asset,
   lastSignal,
+  trades,
+  assets,
 }) {
   return (
     <div className="side-panel">
@@ -161,6 +164,8 @@ export default function SidePanel({
       </div>
 
       <SignalBox lastSignal={lastSignal} />
+
+      <TradeJournal trades={trades} assets={assets} />
     </div>
   );
 }

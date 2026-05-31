@@ -4,7 +4,7 @@ import { useAI } from './hooks/useAI';
 import { buildSystemPrompt } from './utils/prompts';
 import { ASSETS, AGENTS, formatPrice } from './utils/assets';
 import { fetchAllMarketData, fetchFearAndGreed } from './services/marketData';
-import { loadEvolutionState, recallBestStrategy, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
+import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
 import ChatPanel from './components/ChatPanel';
 import SidePanel from './components/SidePanel';
@@ -235,7 +235,9 @@ export default function App() {
   const [swarmData, setSwarmData] = useState(null);
   const [riskLevel, setRiskLevel] = useState(null);
   const [lastSignal, setLastSignal] = useState(null);
+  const [trades, setTrades] = useState(() => loadTrades());
   const [fearAndGreed, setFearAndGreed] = useState(null);
+  const [marketReady, setMarketReady] = useState(false);
   const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
   const [latestTrace, setLatestTrace] = useState(null);
@@ -268,6 +270,7 @@ export default function App() {
 
         setAssets(nextAssets);
         setFearAndGreed(nextFearAndGreed);
+        setMarketReady(true);
         setMarketStatus({
           state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
           updatedAt: new Date().toISOString(),
@@ -297,6 +300,7 @@ export default function App() {
       ]);
       setAssets(nextAssets);
       setFearAndGreed(nextFearAndGreed);
+      setMarketReady(true);
       setMarketStatus({
         state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
         updatedAt: new Date().toISOString(),
@@ -350,6 +354,15 @@ export default function App() {
         setRiskLevel(signal.risk || 'MEDIUM');
         if (signal.swarm) setSwarmData(signal.swarm);
         setLastSignal({ ...signal, symbol: asset.symbol });
+        recordTrade({
+          symbol: asset.symbol,
+          action: signal.action,
+          confidence: signal.confidence,
+          risk: signal.risk,
+          price: asset.price,
+          timestamp: new Date().toISOString(),
+        });
+        setTrades(loadTrades());
       }
 
       const aiMsg = {
@@ -430,51 +443,63 @@ export default function App() {
         </div>
       </header>
 
-      {/* Tickers */}
-      <div className="tickers">
-        {assets.map((a, i) => (
-          <TickerCard
-            key={a.symbol}
-            asset={a}
-            selected={i === selectedIdx}
-            onClick={() => setSelectedIdx(i)}
-          />
-        ))}
-      </div>
-
-      {/* Main layout */}
-      <div className="main-grid">
-
-        <div className="main-column">
-          <TradingViewChart asset={asset} />
-
-          <ChatPanel
-            asset={asset}
-            phase={phase}
-            messages={messages}
-            loading={loading}
-            quickButtons={quickButtons}
-            input={input}
-            setInput={setInput}
-            send={send}
-            chatRef={chatRef}
-          />
+      {!marketReady ? (
+        <div className="skeleton-wrap">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div className="skeleton-card" key={index} />
+          ))}
         </div>
+      ) : (
+        <>
+          {/* Tickers */}
+          <div className="tickers">
+            {assets.map((a, i) => (
+              <TickerCard
+                key={a.symbol}
+                asset={a}
+                selected={i === selectedIdx}
+                onClick={() => setSelectedIdx(i)}
+              />
+            ))}
+          </div>
 
-        <SidePanel
-          phase={phase}
-          setPhase={setPhase}
-          phaseLabels={phaseLabels}
-          evolutionState={evolutionState}
-          latestTrace={latestTrace}
-          agents={AGENTS}
-          agentActive={agentActive}
-          swarmData={swarmData}
-          riskLevel={riskLevel}
-          asset={asset}
-          lastSignal={lastSignal}
-        />
-      </div>
+          {/* Main layout */}
+          <div className="main-grid">
+
+            <div className="main-column">
+              <TradingViewChart asset={asset} />
+
+              <ChatPanel
+                asset={asset}
+                phase={phase}
+                messages={messages}
+                loading={loading}
+                quickButtons={quickButtons}
+                input={input}
+                setInput={setInput}
+                send={send}
+                chatRef={chatRef}
+              />
+            </div>
+
+            <SidePanel
+              phase={phase}
+              setPhase={setPhase}
+              phaseLabels={phaseLabels}
+              evolutionState={evolutionState}
+              latestTrace={latestTrace}
+              agents={AGENTS}
+              agentActive={agentActive}
+              swarmData={swarmData}
+              riskLevel={riskLevel}
+              asset={asset}
+              lastSignal={lastSignal}
+              trades={trades}
+              assets={assets}
+            />
+          </div>
+        </>
+      )}
 
       <div className="disclaimer">
         ⚠ Paper trading simulation only · Not financial advice · Never risk capital you cannot afford to lose
