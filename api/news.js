@@ -1,5 +1,3 @@
-import { kv } from '@vercel/kv';
-
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 
 const NEWS_SEARCH_TERMS = {
@@ -29,18 +27,7 @@ function logError({ path, ip, err }) {
   }));
 }
 
-async function checkRateLimit(ip) {
-  try {
-    const key = `ratelimit:${ip}`;
-    const count = await kv.incr(key);
-    if (count === 1) await kv.expire(key, 60);
-    return count <= MAX_REQUESTS;
-  } catch {
-    return checkMemoryRateLimit(ip);
-  }
-}
-
-function checkMemoryRateLimit(ip) {
+function checkRateLimit(ip) {
   const now = Date.now();
   const record = rateLimits.get(ip) || { count: 0, start: now };
 
@@ -73,7 +60,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'GET') return res.status(405).json({ articles: [] });
 
-    if (!(await checkRateLimit(ip))) {
+    if (!checkRateLimit(ip)) {
       return res.status(429).json({ articles: [] });
     }
 

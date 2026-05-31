@@ -14,8 +14,6 @@
 //   AI_PROVIDER = groq   (or: anthropic)
 // ─────────────────────────────────────────────
 
-import { kv } from '@vercel/kv';
-
 const PROVIDER = process.env.AI_PROVIDER || 'groq';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-70b-8192';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
@@ -47,18 +45,7 @@ function missingKeyError(provider) {
   };
 }
 
-async function checkRateLimit(ip) {
-  try {
-    const key = `ratelimit:${ip}`;
-    const count = await kv.incr(key);
-    if (count === 1) await kv.expire(key, 60);
-    return count <= MAX_REQUESTS;
-  } catch {
-    return checkMemoryRateLimit(ip);
-  }
-}
-
-function checkMemoryRateLimit(ip) {
+function checkRateLimit(ip) {
   const now = Date.now();
   const record = rateLimits.get(ip) || { count: 0, start: now };
 
@@ -101,7 +88,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    if (!(await checkRateLimit(ip))) {
+    if (!checkRateLimit(ip)) {
       return res.status(429).json({ error: 'Too many requests. Wait a minute and try again.' });
     }
 
