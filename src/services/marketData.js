@@ -11,6 +11,8 @@
 // Binance public market data does not need an API key for prices/candles.
 // ─────────────────────────────────────────────────────────
 
+import { calculateEMA, calculateMACD, calculatePriceLevels, calculateRSI } from '../utils/indicators';
+
 // ── Asset map ─────────────────────────────────────────────
 const BINANCE_SYMBOLS = {
   'BTC/USD': 'BTCUSDT',
@@ -22,16 +24,6 @@ const BINANCE_BASE_URLS = [
   'https://data-api.binance.vision',
   'https://api.binance.com',
 ];
-
-const NEWS_SEARCH_TERMS = {
-  'BTC/USD': 'bitcoin',
-  'ETH/USD': 'ethereum',
-  'SOL/USD': 'solana',
-  SPY: 'S&P 500',
-  AAPL: 'Apple stock',
-  'EUR/USD': 'euro dollar',
-  GLD: 'gold price',
-};
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 6500) {
   const controller = new AbortController();
@@ -73,22 +65,13 @@ export async function fetchFearAndGreed() {
 }
 
 export async function fetchNewsHeadlines(symbol) {
-  const key = process.env.REACT_APP_NEWS_KEY;
-  if (!key) return null;
-
   try {
-    const searchTerm = NEWS_SEARCH_TERMS[symbol] || symbol;
-    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(searchTerm)}&pageSize=5&sortBy=publishedAt&apiKey=${encodeURIComponent(key)}`;
+    const url = `/api/news?symbol=${encodeURIComponent(symbol)}`;
     const response = await fetchWithTimeout(url, {}, 6500);
     if (!response.ok) return null;
 
     const payload = await response.json();
-    const articles = Array.isArray(payload?.articles) ? payload.articles : [];
-    return articles.slice(0, 5).map(article => ({
-      title: article.title || 'Untitled',
-      source: article.source?.name || 'Unknown source',
-      publishedAt: article.publishedAt || null,
-    }));
+    return Array.isArray(payload?.articles) ? payload.articles : null;
   } catch {
     return null;
   }
@@ -202,6 +185,27 @@ async function fetchStockPrice(symbol) {
   }
 }
 
+async function fetchForexPrice() {
+  try {
+    const response = await fetchWithTimeout('https://open.er-api.com/v6/latest/EUR', {}, 6500);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const price = Number(data?.rates?.USD);
+    if (!Number.isFinite(price)) return null;
+
+    return {
+      price,
+      change: 0,
+      volume: '—',
+      dataSource: 'ExchangeRate-API',
+      candleInterval: 'spot',
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Main function: fetch ALL assets ───────────────────────
 // This is the function the rest of Jarvis will call
 // It returns a complete updated asset list with real data
@@ -264,7 +268,27 @@ export async function fetchAllMarketData(currentAssets) {
           updated.push({ ...asset, stale: true });
         }
 
-      // ── Keep forex and others unchanged for now ──
+      // ── Handle forex assets ──
+      } else if (asset.market === 'forex' && asset.symbol === 'EUR/USD') {
+        const forexData = await fetchForexPrice();
+
+        if (forexData) {
+          updated.push({
+            ...asset,
+            price: parseFloat(forexData.price.toFixed(4)),
+            change: forexData.change,
+            volume: forexData.volume,
+            candles: asset.candles || [],
+            dataSource: forexData.dataSource,
+            candleInterval: forexData.candleInterval,
+            lastUpdated: new Date().toISOString(),
+            stale: false,
+          });
+        } else {
+          updated.push(asset);
+        }
+
+      // ── Keep others unchanged for now ──
       } else {
         updated.push(asset);
       }
@@ -315,75 +339,6 @@ function calculateIndicators(candles) {
   };
 }
 
-function calculateRSI(closes, period = 14) {
-  const slice = closes.slice(-(period + 1));
-  let gains = 0;
-  let losses = 0;
-
-  for (let i = 1; i < slice.length; i++) {
-    const change = slice[i] - slice[i - 1];
-    if (change >= 0) gains += change;
-    else losses += Math.abs(change);
-  }
-
-  const averageGain = gains / period;
-  const averageLoss = losses / period;
-  if (averageLoss === 0) return 100;
-
-  const relativeStrength = averageGain / averageLoss;
-  return Math.round(100 - (100 / (1 + relativeStrength)));
-}
-
-function calculateEMA(values, period) {
-  if (values.length < period) return null;
-
-  const multiplier = 2 / (period + 1);
-  let ema = values.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
-
-  for (const value of values.slice(period)) {
-    ema = (value - ema) * multiplier + ema;
-  }
-
-  return ema;
-}
-
-function calculateMACD(closes) {
-  const ema12 = rollingEMA(closes, 12);
-  const ema26 = rollingEMA(closes, 26);
-  const macdSeries = closes
-    .map((_, index) => {
-      if (ema12[index] == null || ema26[index] == null) return null;
-      return ema12[index] - ema26[index];
-    })
-    .filter(value => value != null);
-
-  const signalSeries = rollingEMA(macdSeries, 9).filter(value => value != null);
-  const macdLine = macdSeries[macdSeries.length - 1] || 0;
-  const signalLine = signalSeries[signalSeries.length - 1] || 0;
-
-  return {
-    macdLine,
-    signalLine,
-    histogram: macdLine - signalLine,
-  };
-}
-
-function rollingEMA(values, period) {
-  const result = Array(values.length).fill(null);
-  if (values.length < period) return result;
-
-  const multiplier = 2 / (period + 1);
-  let ema = values.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
-  result[period - 1] = ema;
-
-  for (let i = period; i < values.length; i++) {
-    ema = (values[i] - ema) * multiplier + ema;
-    result[i] = ema;
-  }
-
-  return result;
-}
-
 function deriveTrend(price, ema50, ema200, macdHistogram) {
   if (ema200) {
     if (price > ema200 && macdHistogram >= 0) return 'Bullish';
@@ -394,33 +349,4 @@ function deriveTrend(price, ema50, ema200, macdHistogram) {
   if (price > ema50 && macdHistogram >= 0) return 'Bullish';
   if (price < ema50 && macdHistogram < 0) return 'Bearish';
   return 'Neutral';
-}
-
-function calculatePriceLevels(candles) {
-  if (!candles || candles.length < 10) return {};
-
-  const recent = candles.slice(-48);
-  const highs = recent.map(candle => candle.high).filter(Boolean);
-  const lows = recent.map(candle => candle.low).filter(Boolean);
-  const volumes = recent.map(candle => candle.volume || candle.quoteVolume || 0);
-  const closes = recent.map(candle => candle.close).filter(Boolean);
-  const support = Math.min(...lows);
-  const resistance = Math.max(...highs);
-  const firstVolume = average(volumes.slice(0, Math.ceil(volumes.length / 2)));
-  const secondVolume = average(volumes.slice(Math.ceil(volumes.length / 2)));
-  const firstClose = closes[0];
-  const lastClose = closes[closes.length - 1];
-
-  return {
-    support: parseFloat(support.toFixed(2)),
-    resistance: parseFloat(resistance.toFixed(2)),
-    volumeTrend: secondVolume > firstVolume * 1.08 ? 'Rising' : secondVolume < firstVolume * 0.92 ? 'Falling' : 'Stable',
-    candleTrend: lastClose > firstClose ? 'Up' : lastClose < firstClose ? 'Down' : 'Flat',
-  };
-}
-
-function average(values) {
-  const clean = values.filter(value => Number.isFinite(value));
-  if (!clean.length) return 0;
-  return clean.reduce((sum, value) => sum + value, 0) / clean.length;
 }

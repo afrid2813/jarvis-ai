@@ -40,10 +40,9 @@ For local React development, keep client mode as proxy:
 ```bash
 REACT_APP_AI_PROVIDER=proxy
 ALLOWED_ORIGIN=http://localhost:3000
-REACT_APP_NEWS_KEY=your_newsapi_key_here
 ```
 
-AI provider secrets must be configured as server environment variables on Vercel, not as `REACT_APP_*` client variables.
+AI provider and NewsAPI secrets must be configured as server environment variables on Vercel, not as `REACT_APP_*` client variables.
 
 ### 3. Run Locally
 
@@ -60,7 +59,7 @@ Open http://localhost:3000.
 3. Add the server environment variables listed below.
 4. Deploy.
 
-The React app calls `/api/chat`; Vercel runs `api/chat.js` as the protected serverless proxy.
+The React app calls `/api/chat` for AI and `/api/news` for headlines; Vercel runs both as protected serverless proxies.
 
 ---
 
@@ -70,7 +69,6 @@ The React app calls `/api/chat`; Vercel runs `api/chat.js` as the protected serv
 
 ```bash
 REACT_APP_AI_PROVIDER=proxy
-REACT_APP_NEWS_KEY=your_newsapi_key_here
 ```
 
 ### Server / Vercel
@@ -82,6 +80,7 @@ GROQ_KEY=your_groq_key_here
 GROQ_MODEL=llama3-70b-8192
 ANTHROPIC_KEY=your_anthropic_key_here
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
+NEWS_KEY=your_newsapi_key_here
 ```
 
 `ANTHROPIC_KEY` and `ANTHROPIC_MODEL` are optional unless `AI_PROVIDER=anthropic`.

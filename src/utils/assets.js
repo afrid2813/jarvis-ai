@@ -90,3 +90,7 @@ export function formatPrice(asset) {
   if (p < 100) return p.toFixed(2);
   return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+export function getAssetsByMarket(market) {
+  return ASSETS.filter(asset => asset.market === market);
+}

@@ -129,13 +129,30 @@ function buildCandleSummary(asset) {
     return '- No live candles loaded yet.';
   }
 
-  return asset.candles
-    .slice(-12)
+  const snapshot = asset.candles.slice(-12);
+  const lines = snapshot
     .map(candle => {
       const time = new Date(candle.timestamp).toISOString().slice(5, 16).replace('T', ' ');
       return `- ${time} O:${round(candle.open)} H:${round(candle.high)} L:${round(candle.low)} C:${round(candle.close)} V:${round(candle.volume || candle.quoteVolume || 0)}`;
-    })
-    .join('\n');
+    });
+  const closes = snapshot.map(candle => candle.close).filter(Number.isFinite);
+  const volumes = snapshot.map(candle => candle.volume || candle.quoteVolume || 0).filter(Number.isFinite);
+  const lastThree = snapshot.slice(-3);
+  const streak = lastThree.length === 3 && lastThree.every(candle => candle.close > candle.open)
+    ? 'Bullish streak'
+    : lastThree.length === 3 && lastThree.every(candle => candle.close < candle.open)
+      ? 'Bearish streak'
+      : 'Mixed';
+  const high = Math.max(...closes);
+  const low = Math.min(...closes);
+  const averageVolume = volumes.length
+    ? volumes.reduce((sum, value) => sum + value, 0) / volumes.length
+    : 0;
+
+  return [
+    ...lines,
+    `Snapshot summary: High ${round(high)} / Low ${round(low)} / Avg Vol ${round(averageVolume)} / Last 3 candles: ${streak}`,
+  ].join('\n');
 }
 
 function round(value) {

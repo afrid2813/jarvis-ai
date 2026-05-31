@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatPrice } from '../utils/assets';
 import { AgentRow, SwarmBar } from './AgentSwarmPanel';
+import HeadlinesPanel from './HeadlinesPanel';
 import RiskMeter from './RiskMeter';
 import SignalBox from './SignalBox';
 import TradeJournal from './TradeJournal';
@@ -69,6 +70,9 @@ export default function SidePanel({
   lastSignal,
   trades,
   assets,
+  headlines,
+  refreshHeadlines,
+  headlinesLoading,
 }) {
   return (
     <div className="side-panel">
@@ -162,6 +166,12 @@ export default function SidePanel({
           </div>
         </div>
       </div>
+
+      <HeadlinesPanel
+        headlines={headlines}
+        onRefresh={refreshHeadlines}
+        loading={headlinesLoading}
+      />
 
       <SignalBox lastSignal={lastSignal} />
 

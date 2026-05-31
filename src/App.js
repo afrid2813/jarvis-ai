@@ -7,6 +7,7 @@ import { fetchAllMarketData, fetchFearAndGreed, fetchNewsHeadlines } from './ser
 import { loadEvolutionState, loadTrades, recallBestStrategy, recordTrade, runEvolutionCycle } from './self-evolving-os/selfEvolvingOS';
 import TickerCard from './components/TickerCard';
 import ChatPanel from './components/ChatPanel';
+import CompareTable from './components/CompareTable';
 import SidePanel from './components/SidePanel';
 import './App.css';
 
@@ -245,6 +246,8 @@ export default function App() {
   const [trades, setTrades] = useState(() => loadTrades());
   const [fearAndGreed, setFearAndGreed] = useState(null);
   const [headlines, setHeadlines] = useState([]);
+  const [headlinesLoading, setHeadlinesLoading] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
   const [marketReady, setMarketReady] = useState(false);
   const [marketStatus, setMarketStatus] = useState({ state: 'idle', updatedAt: null, error: null });
   const [evolutionState, setEvolutionState] = useState(() => loadEvolutionState(AGENTS));
@@ -272,17 +275,10 @@ export default function App() {
   }, [assets]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function refreshHeadlines() {
-      const result = await fetchNewsHeadlines((assets[selectedIdx] || assets[0]).symbol);
-      if (!cancelled) setHeadlines(result || []);
-    }
-
-    refreshHeadlines();
-    return () => {
-      cancelled = true;
-    };
+    const timer = setTimeout(() => {
+      fetchNewsHeadlines(asset.symbol).then(result => setHeadlines(result || []));
+    }, 400);
+    return () => clearTimeout(timer);
   }, [selectedIdx]);
 
   useEffect(() => {
@@ -300,9 +296,7 @@ export default function App() {
 
         setAssets(nextAssets);
         setFearAndGreed(nextFearAndGreed);
-        const news = await fetchNewsHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
-        if (cancelled) return;
-        setHeadlines(news || []);
+        refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
         setMarketReady(true);
         setMarketStatus({
           state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -333,8 +327,7 @@ export default function App() {
       ]);
       setAssets(nextAssets);
       setFearAndGreed(nextFearAndGreed);
-      const news = await fetchNewsHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
-      setHeadlines(news || []);
+      refreshHeadlines((nextAssets[selectedIdx] || nextAssets[0]).symbol);
       setMarketReady(true);
       setMarketStatus({
         state: nextAssets.some(nextAsset => nextAsset.stale) ? 'warning' : 'ready',
@@ -352,6 +345,16 @@ export default function App() {
       sessionStorage.removeItem('jarvis.chat.v1');
     } catch {
       // Ignore storage failures; the in-memory chat is cleared above.
+    }
+  }
+
+  async function refreshHeadlines(symbol = asset.symbol) {
+    setHeadlinesLoading(true);
+    try {
+      const result = await fetchNewsHeadlines(symbol);
+      setHeadlines(result || []);
+    } finally {
+      setHeadlinesLoading(false);
     }
   }
 
@@ -478,6 +481,9 @@ export default function App() {
           <button className="badge badge-green badge-button" onClick={refreshNow} disabled={marketStatus.state === 'loading'}>
             {marketStatus.state === 'loading' ? 'Refreshing' : 'Live'}
           </button>
+          <button className="badge badge-gray badge-button" onClick={() => setCompareMode(value => !value)}>
+            {compareMode ? 'Compare On' : 'Compare'}
+          </button>
         </div>
         <div className="header-right">
           <div className={`badge ${marketStatus.state === 'error' || marketStatus.state === 'warning' ? 'badge-warn' : 'badge-gray'}`} title={marketStatus.error || ''}>
@@ -508,6 +514,14 @@ export default function App() {
               />
             ))}
           </div>
+
+          {compareMode && (
+            <CompareTable
+              assets={assets}
+              selectedIdx={selectedIdx}
+              onSelect={setSelectedIdx}
+            />
+          )}
 
           {/* Main layout */}
           <div className="main-grid">
@@ -543,6 +557,9 @@ export default function App() {
               lastSignal={lastSignal}
               trades={trades}
               assets={assets}
+              headlines={headlines}
+              refreshHeadlines={() => refreshHeadlines(asset.symbol)}
+              headlinesLoading={headlinesLoading}
             />
           </div>
         </>
