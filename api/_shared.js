@@ -24,6 +24,7 @@ export function logError({ path, ip, err }) {
 export function applyCors(req, res, methods) {
   const origin = req.headers?.origin;
   const allowedOrigins = getAllowedOrigins();
+  const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
 
   if (!origin) {
     return false;
@@ -31,14 +32,9 @@ export function applyCors(req, res, methods) {
 
   const isAllowed =
     allowedOrigins.includes(origin) ||
-    origin.endsWith('.vercel.app');
+    (allowVercelPreviews && origin.endsWith('.vercel.app'));
 
   if (!isAllowed) {
-    console.log('CORS BLOCKED:', {
-      origin,
-      allowedOrigins,
-    });
-
     return false;
   }
 

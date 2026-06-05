@@ -41,6 +41,7 @@ function createRes() {
 
 beforeEach(() => {
   process.env.ALLOWED_ORIGIN = 'http://localhost:3000';
+  delete process.env.ALLOW_VERCEL_PREVIEWS;
   delete process.env.GROQ_KEY;
   delete process.env.NEWS_KEY;
 });
@@ -57,6 +58,36 @@ test('chat blocks forbidden origins', async () => {
 
   expect(res.statusCode).toBe(403);
   expect(res.body.error).toBe('Forbidden origin');
+});
+
+test('chat blocks vercel preview origins unless explicitly enabled', async () => {
+  const req = createReq({
+    method: 'POST',
+    origin: 'https://jarvis-preview.vercel.app',
+    body: { messages: [], systemPrompt: 'test' },
+    ip: '203.0.113.5',
+  });
+  const res = createRes();
+
+  await chatHandler(req, res);
+
+  expect(res.statusCode).toBe(403);
+});
+
+test('chat allows vercel preview origins when explicitly enabled', async () => {
+  process.env.ALLOW_VERCEL_PREVIEWS = 'true';
+  const req = createReq({
+    method: 'POST',
+    origin: 'https://jarvis-preview.vercel.app',
+    body: { messages: [], systemPrompt: 'test' },
+    ip: '203.0.113.6',
+  });
+  const res = createRes();
+
+  await chatHandler(req, res);
+
+  expect(res.statusCode).toBe(500);
+  expect(res.headers['Access-Control-Allow-Origin']).toBe('https://jarvis-preview.vercel.app');
 });
 
 test('chat validates required body fields', async () => {
